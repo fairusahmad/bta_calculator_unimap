@@ -1,14 +1,46 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
     <title>BTA Calculator</title>
+    <style>
+        /* Your CSS styles here */
+    </style>
 </head>
 <body>
-    <form>
-        <!-- other fields -->
-        <label for="semester">Semester:</label>
-        <input type="text" id="semester" name="semester" value="1 2025 2026" />
-        <!-- other fields -->
-    </form>
+    <div id="calculator">
+        <h1>BTA Calculator</h1>
+        <section id="semester-registration">
+            <h2>Register Semester</h2>
+            <form id="semester-form">
+                <label for="semester-name">Semester:</label>
+                <input type="text" id="semester-name" name="semester-name" required>
+                <button type="button" onclick="registerSemester()">Register</button>
+            </form>
+        </section>
+        <section id="subject-registration">
+            <h2>Subject Registration</h2>
+            <form id="subject-form">
+                <label for="subject-name">Subject:</label>
+                <input type="text" id="subject-name" name="subject-name" required>
+                <button type="button" onclick="registerSubject()">Register</button>
+            </form>
+        </section>
+        <script>
+            function registerSemester() {
+                const semesterName = document.getElementById('semester-name').value;
+                // Handle semester registration logic here.
+                alert(`Semester ${semesterName} registered successfully!`);
+            }
+
+            function registerSubject() {
+                const subjectName = document.getElementById('subject-name').value;
+                // Handle subject registration logic here.
+                alert(`Subject ${subjectName} registered successfully!`);
+            }
+        </script>
+    </div>
 </body>
 </html>
