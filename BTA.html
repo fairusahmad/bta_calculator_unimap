@@ -1,46 +1,2025 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="styles.css">
-    <title>BTA Calculator</title>
-    <style>
-        /* Your CSS styles here */
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Jam Beban Calculator (Pengajaran)</title>
+  <style>
+    * { box-sizing: border-box; }
+html, body { max-width: 100%; overflow-x: hidden; }
+    /* Prevent accidental horizontal panning on mobile; allow vertical scroll */
+    body { touch-action: pan-y; }
+    /* Scroll container for wide tables: horizontal scroll stays inside the table, not the whole page */
+    .table-wrap { overflow-x: auto; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+    .table-wrap table { min-width: 640px; }
+    @media (max-width: 640px) {
+      .table-wrap table { min-width: 560px; }
+    }
+    @media (max-width: 480px) {
+      .table-wrap table { min-width: 520px; }
+    }
+
+    body { font-family: system-ui, Arial, sans-serif; margin: 10px 12px; line-height: 1.45; font-size: clamp(15px, 2.8vw, 18px); }
+    h1 { margin: 0 0 10px; font-size: clamp(1.35rem, 5vw, 1.9rem); line-height: 1.2; }
+    h2 { font-size: clamp(1.05rem, 3.8vw, 1.35rem); margin: 0 0 10px; line-height: 1.25; }
+    .card { border: 1px solid #ddd; border-radius: 14px; padding: 14px; margin-bottom: 14px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    label { font-size: clamp(0.85rem, 2.8vw, 0.95rem); color: #333; display: block; margin-bottom: 6px; font-weight: 600; }
+    input, select { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 12px; font-size: 1rem; min-height: 44px; }
+    button { padding: 10px 14px; border: 1px solid #111; border-radius: 12px; background: #111; color: #fff; cursor: pointer; font-size: 0.95rem; min-height: 44px; }
+    button.secondary { background: #fff; color: #111; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    button.saving { animation: saveFlash 1s ease-in-out 1; }
+    @keyframes saveFlash {
+      0% { background: #d8d8d8; color: #111; border-color: #111; }
+      35% { background: #111; color: #fff; border-color: #111; }
+      70% { background: #d8d8d8; color: #111; border-color: #111; }
+      100% { background: #fff; color: #111; border-color: #111; }
+    }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: clamp(0.8rem, 2.7vw, 0.95rem); }
+    th, td { border-bottom: 1px solid #eee; padding: 6px 4px; text-align: center; }
+    th { font-size: 0.76rem; color: #444; background: #fafafa; position: sticky; top: 0; font-weight: 600; }
+    td { font-size: 0.82rem; }
+    td.num { text-align: center; font-variant-numeric: tabular-nums; }
+    .muted { color: #666; font-size: 0.85rem; }
+    .pill { display: inline-block; padding: 2px 6px; border-radius: 999px; background: #f2f2f2; font-size: 0.76rem; margin: 2px 2px 2px 0; }
+    .danger { color: #b00020; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; }
+    .status { font-size: 0.76rem; color: #666; margin-left: 4px; }
+    #progressInfo { font-size: 0.9rem; }
+    #totalJam { font-size: 0.95rem; }
+    #msg { font-size: 0.8rem; }
+    div[style*="max-height"] { font-size: 0.85rem; }
+    @media (max-width: 768px) {
+      body { margin: 8px 10px; }
+      .grid { grid-template-columns: 1fr; gap: 8px; }
+      .card { padding: 10px; margin-bottom: 12px; }
+      .row { gap: 6px; margin-top: 6px; }
+      .table-wrap table { min-width: 560px; }
+      [style*="grid-template-columns: repeat(2"] { grid-template-columns: 1fr !important; }
+      [style*="grid-template-columns: repeat(3"] { grid-template-columns: 1fr !important; }
+    }
+  
+    /* --- Mobile responsiveness improvements --- */
+    @media (max-width: 600px) {
+      body { margin: 10px; }
+      .grid { grid-template-columns: 1fr; }
+      .table-wrap table { min-width: 520px; } /* keep horizontal scroll inside table */
+    }
+
+    /* Action buttons row (Add/Clear/Save/Cache) */
+    .row.actions { gap: 10px; align-items: stretch; }
+    .row.actions .status { width: 100%; display: block; }
+    .log-box {
+      margin-top: 10px;
+      border: 1px solid #e2e2e2;
+      border-radius: 10px;
+      background: #fafafa;
+      padding: 8px;
+    }
+    .log-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      gap: 8px;
+    }
+    .log-view {
+      margin: 0;
+      max-height: 160px;
+      overflow: auto;
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.76rem;
+      line-height: 1.35;
+      color: #222;
+    }
+    @media (max-width: 600px) {
+      .row.actions { flex-direction: column; }
+      .row.actions button { width: 100%; }
+    }
+    .hidden { display: none !important; }
+    .admin-panel {
+      margin-top: 10px;
+      border: 1px dashed #cfcfcf;
+      border-radius: 10px;
+      background: #fcfcfc;
+      padding: 10px;
+    }
+    .admin-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .app-shell { max-width: 1220px; margin: 0 auto; }
+    .landing {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: linear-gradient(160deg, #f7f7f7, #ececec);
+    }
+    .landing-card {
+      width: min(640px, 100%);
+      border: 1px solid #d8d8d8;
+      border-radius: 16px;
+      background: #fff;
+      padding: 18px;
+      box-shadow: 0 6px 22px rgba(0, 0, 0, 0.08);
+      text-align: center;
+    }
+    .landing-title { margin: 0 0 8px; font-size: clamp(1.4rem, 5vw, 2rem); line-height: 1.2; }
+    .landing-sub { margin: 0 0 14px; color: #444; }
+    .landing-foot { margin-top: 12px; font-size: 0.9rem; color: #666; }
+
+  </style>
+  <!-- KaTeX for rendering math formulas -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.getElementById('formulaBlock'),{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}]});"></script>
 </head>
 <body>
-    <div id="calculator">
-        <h1>BTA Calculator</h1>
-        <section id="semester-registration">
-            <h2>Register Semester</h2>
-            <form id="semester-form">
-                <label for="semester-name">Semester:</label>
-                <input type="text" id="semester-name" name="semester-name" required>
-                <button type="button" onclick="registerSemester()">Register</button>
-            </form>
-        </section>
-        <section id="subject-registration">
-            <h2>Subject Registration</h2>
-            <form id="subject-form">
-                <label for="subject-name">Subject:</label>
-                <input type="text" id="subject-name" name="subject-name" required>
-                <button type="button" onclick="registerSubject()">Register</button>
-            </form>
-        </section>
-        <script>
-            function registerSemester() {
-                const semesterName = document.getElementById('semester-name').value;
-                // Handle semester registration logic here.
-                alert(`Semester ${semesterName} registered successfully!`);
-            }
-
-            function registerSubject() {
-                const subjectName = document.getElementById('subject-name').value;
-                // Handle subject registration logic here.
-                alert(`Subject ${subjectName} registered successfully!`);
-            }
-        </script>
+  <div id="landingPage" class="landing">
+    <div class="landing-card">
+      <h1 class="landing-title">Jam Beban Calculator</h1>
+      <p class="landing-sub">Sistem pengiraan dan pengesahan rekod jam beban pengajaran.</p>
+      <button id="enterAppBtn" type="button">Enter System</button>
+      <p class="landing-foot">Developed by Fairus, FKTEN</p>
     </div>
+  </div>
+  <div id="appRoot" class="app-shell hidden">
+  <h1>Jam Beban Calculator (Pengajaran)</h1>
+  <p class="muted">
+    Model:
+    <span class="pill">JamPelajar = MAX(0, BilPelajar - T) x 0.033 [T=30, Makmal Btech: T=15]</span>
+    <span class="pill">Nilai Beban = (Jam Pertemuan x Jam Beban x Bil. Minggu) + (JamPelajar x Bil. Minggu)</span>
+  </p>
+  <div class="card">
+    <h2 style="margin:0 0 10px;">User</h2>
+    <div class="grid" style="grid-template-columns: repeat(2, minmax(160px, 1fr));">
+      <div>
+        <label for="backupName">Name</label>
+        <input id="backupName" type="text" placeholder="e.g., Ali" value="<?= currentUserName ?>" />
+      </div>
+      <div>
+        <label for="lecturerEmail">Lecturer Email (L1)</label>
+        <input id="lecturerEmail" type="email" placeholder="e.g., ali@unimap.edu.my" value="<?= currentUserEmail ?>" readonly />
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin:0 0 10px;">Register Semester</h2>
+
+    <div class="grid" style="grid-template-columns: repeat(3, minmax(120px, 1fr));">
+      <div>
+        <label for="newSemester">Semester</label>
+        <input id="newSemester" type="text" placeholder="e.g., 1 2025/2026" />
+      </div>
+      <div style="display: flex; align-items: flex-end;">
+        <button id="addSemesterBtn">Add Semester</button>
+      </div>
+    </div>
+
+    <div style="margin-top: 12px;">
+      <p class="muted" style="margin:0 0 8px;">Registered Semesters:</p>
+      <div id="semesterList" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin:0 0 10px;">Add Row</h2>
+
+    <div class="grid">
+      <div>
+        <label for="subject">Subject</label>
+        <select id="subject">
+          <option value="">-- Select Subject --</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="semester">Semester</label>
+        <select id="semester">
+          <option value="">-- Select Semester --</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="kredit">Kredit</label>
+        <input id="kredit" type="number" min="0" step="0.5" value="3" />
+      </div>
+
+      <div>
+        <label for="jamMinggu">Jam Pertemuan (Mingguan)</label>
+        <input id="jamMinggu" type="number" min="0" step="0.5" value="3" />
+      </div>
+
+      <div>
+        <label for="peringkat">Peringkat</label>
+        <select id="peringkat">
+          <option value="1 - Prasiswazah">1 - Prasiswazah</option>
+          <option value="2 - Pascasiswazah">2 - Pascasiswazah</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="jenis">Jenis</label>
+        <select id="jenis">
+          <option value="1 - Kuliah">1 - Kuliah</option>
+          <option value="2 - Makmal">2 - Makmal</option>
+          <option value="3 - Makmal (Btech)">3 - Makmal (Btech)</option>
+          <option value="4 - Tutorial">4 - Tutorial</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="kumpulan">Kumpulan</label>
+        <select id="kumpulan">
+          <option value="1 - Kumpulan Pertama">1 - Kumpulan Pertama</option>
+          <option value="2 - Kumpulan Ulangan">2 - Kumpulan Ulangan</option>
+        </select>
+      </div>
+
+      <div>
+        <label id="scheduleLabel" for="dateInput">Date</label>
+        <input id="dateInput" type="date" />
+        <select id="weekInput" style="display:none;">
+          <option value="1">Week 1</option>
+          <option value="2">Week 2</option>
+          <option value="3">Week 3</option>
+          <option value="4">Week 4</option>
+          <option value="5">Week 5</option>
+          <option value="6">Week 6</option>
+          <option value="7">Week 7</option>
+          <option value="8">Week 8</option>
+          <option value="9">Week 9</option>
+          <option value="10">Week 10</option>
+          <option value="11">Week 11</option>
+          <option value="12">Week 12</option>
+          <option value="13">Week 13</option>
+          <option value="14">Week 14</option>
+          <option value="15">Week 15</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="pelajar">Bilangan Pelajar</label>
+        <input id="pelajar" type="number" min="0" step="1" value="30" />
+      </div>
+
+      <div id="ownerModeWrap" class="hidden">
+        <label for="ownerMode">L2 Mode</label>
+        <select id="ownerMode">
+          <option value="l2">Use L2 Email</option>
+          <option value="self">L1 / Me (Skip Email Approval)</option>
+        </select>
+      </div>
+
+      <div id="ownerEmailWrap">
+        <label for="ownerEmail">Subject Owner Email (L2)</label>
+        <input id="ownerEmail" type="email" placeholder="Auto from subject mapping" readonly />
+      </div>
+
+    </div>
+    <div class="admin-panel">
+      <div class="log-head" style="margin-bottom: 8px;">
+        <span class="muted">Admin Mode</span>
+        <span id="adminStatus" class="status">Locked</span>
+      </div>
+      <div class="row">
+        <input id="adminCode" type="password" placeholder="Paste admin secret code" style="max-width: 280px;" />
+        <button id="adminUnlockBtn" class="secondary" type="button">Unlock Admin</button>
+        <button id="adminLockBtn" class="secondary" type="button">Lock</button>
+        <span id="adminMsg" class="status"></span>
+      </div>
+      <div id="adminTools" class="hidden">
+        <div class="admin-grid">
+          <div>
+            <label for="adminBulkStatus">Bulk Row Status</label>
+            <select id="adminBulkStatus">
+              <option value="Draft">Draft</option>
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+          <div style="display:flex; align-items:flex-end;">
+            <button id="adminApplyStatusBtn" class="secondary" type="button">Apply Status to All Rows</button>
+          </div>
+          <div style="display:flex; align-items:flex-end;">
+            <button id="adminRebindOwnersBtn" class="secondary" type="button">Rebind Owners from Subject Map</button>
+          </div>
+        </div>
+        <p class="muted" style="margin: 8px 0 0;">Admin tools are for testing/debugging only.</p>
+      </div>
+    </div>
+
+    <div class="row actions">
+      <button id="addBtn">Add to Table</button>
+      <span id="statusAdd" class="status"></span>
+      <button id="saveCacheBtn" class="secondary">Save</button>
+      <span id="statusSave" class="status"></span>
+      <button id="clearCacheBtn" class="secondary">Clear Cache</button>
+      <span id="statusClearCache" class="status"></span>
+      <button id="submitVerifyBtn" class="secondary">Submit Pending for Verify</button>
+      <span id="statusVerify" class="status"></span>
+      <button id="refreshStatusBtn" class="secondary">Refresh Verify Status</button>
+      <span id="statusRefresh" class="status"></span>
+      <span id="preview" class="muted"></span>
+    </div>
+    <p class="muted" style="margin:6px 0 0;">
+      Note: If browser cache is cleared, saved data will be missing.
+    </p>
+
+    <p class="muted" style="margin-top:10px;">
+      Default rules:
+      <span class="mono">Wajaran Beban Seminggu</span> = Jenis 1/2/3 -> Kumpulan Pertama: 3, Kumpulan Ulangan: 2; Jenis 4 -> 1.
+    </p>
+    <div class="log-box">
+      <div class="log-head">
+        <span class="muted">Logs</span>
+        <button id="clearLogBtn" class="secondary" type="button">Clear Logs</button>
+      </div>
+      <pre id="debugLog" class="log-view"></pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content: space-between; align-items: flex-start;">
+      <div>
+        <h2 style="margin:0 0 10px;">Table</h2>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <div>
+            <label for="maxTarget" style="display: block; font-size: 12px; color: #333; margin-bottom: 4px;">Max Target Jam Beban</label>
+            <input id="maxTarget" type="number" min="0" step="0.5" value="448" style="width: 120px;" />
+          </div>
+          <div>
+            <div id="progressInfo" class="muted" style="font-size: 13px; margin-top: 18px;"><strong id="percentage">0</strong>%</div>
+          </div>
+        </div>
+      </div>
+      <div class="muted">
+        Total Approved Jam Beban: <strong id="totalJam">0</strong>
+      </div>
+    </div>
+
+    <div style="width: 100%; height: 24px; background: #e0e0e0; border-radius: 6px; overflow: hidden; margin-top: 10px;">
+      <div id="progressBar" style="height: 100%; width: 0%; background: #4caf50; transition: width 0.3s ease, background-color 0.3s ease; display: flex; align-items: center; justify-content: center; font-size: 11px; color: white; font-weight: bold;"></div>
+    </div>
+
+    <div class="table-wrap" style="max-height:55vh; margin-top:10px;">
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Subject</th>
+            <th class="num">Kredit</th>
+            <th class="num">Semester</th>
+            <th class="num">Jam Pertemuan (Mingguan)</th>
+            <th>Peringkat</th>
+            <th>Jenis</th>
+            <th>Kumpulan</th>
+            <th>Date / Week</th>
+            <th class="num">Bilangan Pelajar</th>
+            <th>L2 (Owner)</th>
+            <th>Status</th>
+            <th class="num">Jum Pelajar (&gt;30)</th>
+            <th class="num">Wajaran Beban Seminggu</th>
+            <th class="num">Jam Beban</th>
+            <th class="num">Approved Jam Beban</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <p id="msg" class="muted" style="margin-top:10px;"></p>
+  </div>
+
+  <div class="card">
+    <h2 style="margin:0 0 10px;">Summary (Grouped)</h2>
+    <div class="table-wrap" style="max-height:55vh; margin-top:10px;">
+      <table id="summaryTbl">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Subject</th>
+            <th class="num">Kredit</th>
+            <th class="num">Semester</th>
+            <th class="num">Jam Pertemuan (Mingguan)</th>
+            <th>Peringkat</th>
+            <th>Jenis</th>
+            <th>Kumpulan</th>
+            <th class="num">Bilangan Pelajar</th>
+            <th class="num">Total Bilangan Minggu</th>
+            <th class="num">Jum Pelajar (&gt;30)</th>
+            <th class="num">Wajaran Beban Seminggu</th>
+            <th class="num">Jam Beban</th>
+            <th class="num">Approved Jam Beban</th>
+          </tr>
+        </thead>
+        <tbody id="summaryBody"></tbody>
+      </table>
+    </div>
+  </div>
+  </div>
+
+  <script>
+    // --- Rules (match sheet behaviour seen in your screenshot) ---
+    function parseJenisNumber(jenis) {
+      // "3 - Makmal (Btech)" -> 3
+      const m = String(jenis).match(/^(\d+)\s*-/);
+      return m ? Number(m[1]) : NaN;
+    }
+
+    function includesCI(haystack, needle) {
+      return String(haystack).toLowerCase().includes(String(needle).toLowerCase());
+    }
+
+    function getActivityConfig({ jenis, kumpulan }) {
+      const j = String(jenis || "");
+      const k = String(kumpulan || "");
+
+      let baseCoeff = 0;
+      let threshold = 30;
+
+      if (includesCI(j, "tutorial") || j.trim().startsWith("4")) {
+        baseCoeff = 1;
+        threshold = 30;
+        return { baseCoeff, threshold, activity: "tutorial" };
+      }
+
+      if (includesCI(j, "program teknologi") || includesCI(j, "teknologi")) {
+        baseCoeff = 2;
+        threshold = 15;
+        return { baseCoeff, threshold, activity: "makmal_program_teknologi" };
+      }
+
+      if (includesCI(j, "makmal") || j.trim().startsWith("2") || j.trim().startsWith("3")) {
+        baseCoeff = 2;
+        threshold = 30;
+        return { baseCoeff, threshold, activity: "makmal" };
+      }
+
+      if (includesCI(j, "kuliah") || j.trim().startsWith("1")) {
+        if (includesCI(k, "pertama") || k.trim().startsWith("1")) {
+          baseCoeff = 3;
+        } else if (includesCI(k, "ulangan") || k.trim().startsWith("2")) {
+          baseCoeff = 2;
+        } else {
+          baseCoeff = 3;
+        }
+        threshold = 30;
+        return { baseCoeff, threshold, activity: "kuliah" };
+      }
+
+      return { baseCoeff, threshold, activity: "unknown" };
+    }
+
+    const EXTRA_RATE = 0.033;
+
+    function calcJamPelajar(bilanganPelajar, threshold) {
+      const E = Number(bilanganPelajar) || 0;
+      const extraStudents = Math.max(0, E - threshold);
+      return extraStudents * EXTRA_RATE;
+    }
+
+    function calcWajaranBebanSeminggu(jenis, kumpulan) {
+      const { baseCoeff } = getActivityConfig({ jenis, kumpulan });
+      return baseCoeff;
+    }
+
+    function round1(x) {
+      // numeric rounding to 1 decimal (keep as number)
+      return Math.round((Number(x) + Number.EPSILON) * 10) / 10;
+    }
+
+    function formatDateDisplay(value) {
+      if (!value) return "";
+      const d = new Date(value + "T00:00:00");
+      if (Number.isNaN(d.getTime())) return value;
+      return d.toLocaleDateString(undefined, {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      });
+    }
+
+    function calcAll({ jamPertemuanMingguan, jenis, kumpulan, bilanganPelajar, bilanganMinggu }) {
+      const A = Number(jamPertemuanMingguan) || 0;
+      const F = Number(bilanganMinggu) || 0;
+      const { baseCoeff, threshold } = getActivityConfig({ jenis, kumpulan });
+      const H = baseCoeff;
+      const G = calcJamPelajar(bilanganPelajar, threshold);
+      const I = (A * H * F) + (G * F);
+
+      return {
+        jamPelajar: round1(G),            // display 1dp like excel screenshot
+        wajaran: H,                       // 1.0 or 2.0
+        jamBeban: round1(I),              // display 1dp
+        // if you also want raw values:
+        jamPelajar_raw: G,
+        jamBeban_raw: I
+      };
+    }
+
+    // --- UI ---
+    const els = {
+      landingPage: document.getElementById("landingPage"),
+      enterAppBtn: document.getElementById("enterAppBtn"),
+      appRoot: document.getElementById("appRoot"),
+      subject: document.getElementById("subject"),
+      newSemester: document.getElementById("newSemester"),
+      addSemesterBtn: document.getElementById("addSemesterBtn"),
+      semesterList: document.getElementById("semesterList"),
+      semester: document.getElementById("semester"),
+      kredit: document.getElementById("kredit"),
+      jamMinggu: document.getElementById("jamMinggu"),
+      peringkat: document.getElementById("peringkat"),
+      jenis: document.getElementById("jenis"),
+      kumpulan: document.getElementById("kumpulan"),
+      dateInput: document.getElementById("dateInput"),
+      weekInput: document.getElementById("weekInput"),
+      scheduleLabel: document.getElementById("scheduleLabel"),
+      pelajar: document.getElementById("pelajar"),
+      addBtn: document.getElementById("addBtn"),
+      tbody: document.getElementById("tbody"),
+      summaryBody: document.getElementById("summaryBody"),
+      totalJam: document.getElementById("totalJam"),
+      maxTarget: document.getElementById("maxTarget"),
+      percentage: document.getElementById("percentage"),
+      progressBar: document.getElementById("progressBar"),
+      preview: document.getElementById("preview"),
+      msg: document.getElementById("msg"),
+      statusAdd: document.getElementById("statusAdd"),
+      statusSave: document.getElementById("statusSave"),
+      statusClearCache: document.getElementById("statusClearCache"),
+      saveCacheBtn: document.getElementById("saveCacheBtn"),
+      clearCacheBtn: document.getElementById("clearCacheBtn"),
+      backupName: document.getElementById("backupName"),
+      lecturerEmail: document.getElementById("lecturerEmail"),
+      ownerModeWrap: document.getElementById("ownerModeWrap"),
+      ownerMode: document.getElementById("ownerMode"),
+      ownerEmailWrap: document.getElementById("ownerEmailWrap"),
+      ownerEmail: document.getElementById("ownerEmail"),
+      submitVerifyBtn: document.getElementById("submitVerifyBtn"),
+      statusVerify: document.getElementById("statusVerify"),
+      refreshStatusBtn: document.getElementById("refreshStatusBtn"),
+      statusRefresh: document.getElementById("statusRefresh"),
+      clearLogBtn: document.getElementById("clearLogBtn"),
+      debugLog: document.getElementById("debugLog"),
+      adminCode: document.getElementById("adminCode"),
+      adminUnlockBtn: document.getElementById("adminUnlockBtn"),
+      adminLockBtn: document.getElementById("adminLockBtn"),
+      adminStatus: document.getElementById("adminStatus"),
+      adminMsg: document.getElementById("adminMsg"),
+      adminTools: document.getElementById("adminTools"),
+      adminBulkStatus: document.getElementById("adminBulkStatus"),
+      adminApplyStatusBtn: document.getElementById("adminApplyStatusBtn"),
+      adminRebindOwnersBtn: document.getElementById("adminRebindOwnersBtn"),
+    };
+
+    function isKuliah(jenis) {
+      const j = String(jenis || "").trim();
+      return includesCI(j, "kuliah") || j.startsWith("1");
+    }
+
+    function updateScheduleInputMode() {
+      const kuliah = isKuliah(els.jenis.value);
+      if (kuliah) {
+        els.scheduleLabel.setAttribute("for", "weekInput");
+        els.scheduleLabel.textContent = "Week";
+        els.dateInput.style.display = "none";
+        els.weekInput.style.display = "";
+      } else {
+        els.scheduleLabel.setAttribute("for", "dateInput");
+        els.scheduleLabel.textContent = "Date";
+        els.dateInput.style.display = "";
+        els.weekInput.style.display = "none";
+      }
+    }
+
+    const subjects = [];
+    const semesters = ["1 2025/2026"];
+    const rows = [];
+    const subjectOwnerMap = {};
+    const ADMIN_SECRET_HASH = "dd2dea8878b29f0242ba4c2ad92af19aed05ca4afda6b54fddcc21320952bf46"; // "BTA-ADMIN-2026"
+    const adminState = { unlocked: false };
+    const CACHE_KEY = "bta-cache-v1";
+    const NAME_KEY = "bta-user-name";
+    const HANDLE_KEY = "bta-backup-handle";
+    const DB_NAME = "bta-backup-db";
+    const DB_STORE = "handles";
+
+    function openDb() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(DB_STORE)) {
+            db.createObjectStore(DB_STORE);
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function idbSet(key, value) {
+      const db = await openDb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, "readwrite");
+        tx.objectStore(DB_STORE).put(value, key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    async function idbGet(key) {
+      const db = await openDb();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, "readonly");
+        const req = tx.objectStore(DB_STORE).get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    function sanitizeFileName(name) {
+      return String(name || "")
+        .trim()
+        .replace(/[\\\/:*?"<>|]+/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function buildBackupFileName() {
+      const raw = sanitizeFileName(els.backupName.value);
+      return raw ? `BTA ${raw}.json` : "BTA.json";
+    }
+
+    function showStatus(el, text, timeoutMs = 2000) {
+      if (!el) return;
+      el.textContent = text;
+      if (timeoutMs > 0) {
+        setTimeout(() => {
+          if (el.textContent === text) el.textContent = "";
+        }, timeoutMs);
+      }
+    }
+
+    function appendLog(level, message, meta) {
+      if (!els.debugLog) return;
+      const ts = new Date().toLocaleTimeString();
+      const line = [`[${ts}]`, String(level || "INFO"), String(message || "")].join(" ");
+      const metaText = meta ? ` ${JSON.stringify(meta)}` : "";
+      const next = `${line}${metaText}\n`;
+      els.debugLog.textContent += next;
+      els.debugLog.scrollTop = els.debugLog.scrollHeight;
+    }
+
+    function getRuntimeInfo() {
+      const href = String((window.location && window.location.href) || "");
+      let pathname = "";
+      try {
+        pathname = new URL(href).pathname.toLowerCase();
+      } catch (_) {
+        pathname = "";
+      }
+      const hasExecPath = pathname.endsWith("/exec");
+      const isDevPath = pathname.endsWith("/dev");
+      const isPanelPath = pathname.includes("usercodeapppanel");
+      const isPreview = isDevPath || isPanelPath;
+      const isDeployedExec = hasExecPath && !isPreview;
+      return { href, pathname, hasExecPath, isPreview, isDeployedExec };
+    }
+
+    function resolveApiUrl() {
+      const rt = getRuntimeInfo();
+      if (!rt.isDeployedExec) return "";
+      const u = new URL(rt.href);
+      u.search = "";
+      u.hash = "";
+      return u.toString();
+    }
+
+    function canUseAppsScriptRuntime_() {
+      return Boolean(window.google && google.script && google.script.run);
+    }
+
+    function callAppsScript_(fnName, args) {
+      return new Promise((resolve, reject) => {
+        if (!canUseAppsScriptRuntime_()) {
+          reject(new Error("Apps Script runtime is not available."));
+          return;
+        }
+        try {
+          const runner = google.script.run
+            .withSuccessHandler((payload) => resolve(payload || {}))
+            .withFailureHandler((err) => {
+              const msg = (err && err.message) ? err.message : String(err || "Apps Script call failed.");
+              reject(new Error(msg));
+            });
+          const callArgs = Array.isArray(args) ? args : [];
+          runner[fnName](...callArgs);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }
+
+    function isPreviewPanelMode() {
+      return getRuntimeInfo().isPreview;
+    }
+
+    function isUniMAPEmail(email) {
+      const e = String(email || "").trim().toLowerCase();
+      return /^[a-z0-9._%+-]+@unimap\.edu\.my$/.test(e);
+    }
+
+    async function sha256Hex_(value) {
+      const src = String(value || "");
+      if (!(window.crypto && crypto.subtle && window.TextEncoder)) {
+        return "";
+      }
+      const enc = new TextEncoder().encode(src);
+      const digest = await crypto.subtle.digest("SHA-256", enc);
+      return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    function setAdminUnlocked_(value) {
+      adminState.unlocked = Boolean(value);
+      if (els.adminTools) els.adminTools.classList.toggle("hidden", !adminState.unlocked);
+      if (els.adminStatus) els.adminStatus.textContent = adminState.unlocked ? "Unlocked" : "Locked";
+      if (els.adminStatus) els.adminStatus.style.color = adminState.unlocked ? "#127a2a" : "#666";
+      updateOwnerInputMode();
+      updatePreview();
+      appendLog("INFO", "Admin mode changed", { unlocked: adminState.unlocked });
+    }
+
+    function updateOwnerInputMode() {
+      // Users cannot choose owner mode manually; owner is always determined by subject mapping.
+      els.ownerMode.value = "l2";
+      els.ownerModeWrap.classList.add("hidden");
+      els.ownerEmailWrap.classList.remove("hidden");
+      applyOwnerBySubject_(true);
+    }
+
+    function makeId() {
+      if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+      return `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    }
+
+    function nameFromEmail_(email) {
+      const local = String(email || "").trim().toLowerCase().split("@")[0] || "";
+      if (!local) return "";
+      return local
+        .split(/[._+-]+/)
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+    }
+
+    function syncNameFromLecturerEmail_() {
+      if (!els.backupName || !els.lecturerEmail) return;
+      const existing = String(els.backupName.value || "").trim();
+      if (existing) {
+        localStorage.setItem(NAME_KEY, existing);
+        return;
+      }
+      const derived = nameFromEmail_(els.lecturerEmail.value);
+      if (!derived) return;
+      els.backupName.value = derived;
+      localStorage.setItem(NAME_KEY, derived);
+    }
+
+    function callJsonp(url, timeoutMs = 15000) {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        let callbackName = "";
+        const timeout = setTimeout(() => {
+          cleanup();
+          reject(new Error("JSONP request timeout."));
+        }, timeoutMs);
+
+        function cleanup() {
+          clearTimeout(timeout);
+          if (callbackName) {
+            try { delete window[callbackName]; } catch (_) { window[callbackName] = undefined; }
+          }
+          if (script.parentNode) script.parentNode.removeChild(script);
+        }
+
+        script.onerror = () => {
+          cleanup();
+          reject(new Error("Unable to load JSONP endpoint."));
+        };
+
+        const cbMatch = String(url).match(/[?&]callback=([^&]+)/);
+        if (!cbMatch) {
+          cleanup();
+          reject(new Error("Missing callback in JSONP URL."));
+          return;
+        }
+
+        callbackName = decodeURIComponent(cbMatch[1]);
+        window[callbackName] = (payload) => {
+          cleanup();
+          resolve(payload || {});
+        };
+
+        script.src = url;
+        document.head.appendChild(script);
+      });
+    }
+
+    async function upsertRowToServer_(row) {
+      if (canUseAppsScriptRuntime_()) {
+        const result = await callAppsScript_("apiUpsertLecturerRow", [row]);
+        if (result && result.ok === false) throw new Error(result.message || "Upsert failed.");
+        return result;
+      }
+      const apiUrl = resolveApiUrl();
+      if (!apiUrl) throw new Error("Missing deployed Web App /exec URL.");
+      const payload = { action: "upsert_row", row: row };
+      try {
+        const resp = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload)
+        });
+        const raw = await resp.text();
+        const result = raw ? JSON.parse(raw) : {};
+        if (!resp.ok || result.ok === false) {
+          throw new Error((result && result.message) || `API error (${resp.status})`);
+        }
+        return result;
+      } catch (_) {
+        const cb = `btaUpsertCb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        const sep = apiUrl.includes("?") ? "&" : "?";
+        const src = `${apiUrl}${sep}action=upsert_row&row=${encodeURIComponent(JSON.stringify(row))}&callback=${encodeURIComponent(cb)}`;
+        const result = await callJsonp(src, 15000);
+        if (result && result.ok === false) throw new Error(result.message || "Upsert failed.");
+        return result;
+      }
+    }
+
+    async function deleteRowOnServer_(recordId, helperEmail) {
+      if (canUseAppsScriptRuntime_()) {
+        const result = await callAppsScript_("apiDeleteLecturerRow", [recordId, helperEmail]);
+        if (result && result.ok === false) throw new Error(result.message || "Delete failed.");
+        return result;
+      }
+      const apiUrl = resolveApiUrl();
+      if (!apiUrl) throw new Error("Missing deployed Web App /exec URL.");
+      const payload = { action: "delete_row", record_id: recordId, helper_lecturer_email: helperEmail };
+      try {
+        const resp = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload)
+        });
+        const raw = await resp.text();
+        const result = raw ? JSON.parse(raw) : {};
+        if (!resp.ok || result.ok === false) {
+          throw new Error((result && result.message) || `API error (${resp.status})`);
+        }
+        return result;
+      } catch (_) {
+        const cb = `btaDelCb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        const sep = apiUrl.includes("?") ? "&" : "?";
+        const src = `${apiUrl}${sep}action=delete_row&record_id=${encodeURIComponent(recordId)}&helper_lecturer_email=${encodeURIComponent(helperEmail)}&callback=${encodeURIComponent(cb)}`;
+        const result = await callJsonp(src, 15000);
+        if (result && result.ok === false) throw new Error(result.message || "Delete failed.");
+        return result;
+      }
+    }
+
+    async function syncRowsFromServer_() {
+      const helperEmail = String(els.lecturerEmail.value || "").trim().toLowerCase();
+      if (!isUniMAPEmail(helperEmail)) return;
+      if (canUseAppsScriptRuntime_()) {
+        const data = await callAppsScript_("apiGetLecturerRows", [helperEmail]);
+        if (data && data.ok === false) throw new Error(data.message || "Sync failed.");
+        const items = Array.isArray(data.items) ? data.items : [];
+        rows.length = 0;
+        rows.push(...items);
+        hydrateRows();
+        render();
+        saveToCache();
+        appendLog("OK", "Synced from All_lecturer_record", { rows: rows.length, via: "google.script.run" });
+        return;
+      }
+      const apiUrl = resolveApiUrl();
+      if (!apiUrl) return;
+      const cb = `btaRowsCb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const sep = apiUrl.includes("?") ? "&" : "?";
+      const src = `${apiUrl}${sep}action=rows&helper_email=${encodeURIComponent(helperEmail)}&callback=${encodeURIComponent(cb)}`;
+      const data = await callJsonp(src, 15000);
+      if (data && data.ok === false) throw new Error(data.message || "Sync failed.");
+      const items = Array.isArray(data.items) ? data.items : [];
+      rows.length = 0;
+      rows.push(...items);
+      hydrateRows();
+      render();
+      saveToCache();
+      appendLog("OK", "Synced from All_lecturer_record", { rows: rows.length });
+    }
+
+    function setSubjectsFromServer_(items) {
+      const map = {};
+      const list = [];
+      const seen = new Set();
+      const source = Array.isArray(items) ? items : [];
+      source.forEach((it) => {
+        const code = String((it && (it.subject_code || it.subjectCode || it.subject)) || "").trim().toUpperCase();
+        const owner = String((it && (it.owner_email || it.ownerEmail)) || "").trim().toLowerCase();
+        if (!code || seen.has(code)) return;
+        seen.add(code);
+        list.push(code);
+        map[code] = owner;
+      });
+
+      subjects.length = 0;
+      subjects.push(...list);
+      Object.keys(subjectOwnerMap).forEach((k) => delete subjectOwnerMap[k]);
+      Object.keys(map).forEach((k) => { subjectOwnerMap[k] = map[k]; });
+      renderSubjects();
+      applyOwnerBySubject_(false);
+    }
+
+    function applyOwnerBySubject_(forceUpdate) {
+      const selected = String(els.subject.value || "").trim().toUpperCase();
+      if (!selected) {
+        els.ownerEmail.value = "";
+        return;
+      }
+      const mappedOwner = String(subjectOwnerMap[selected] || "").trim().toLowerCase();
+      if (!mappedOwner) {
+        els.ownerEmail.value = "";
+        return;
+      }
+      els.ownerEmail.value = mappedOwner;
+    }
+
+    async function syncSubjectsFromServer_() {
+      let data = {};
+      if (canUseAppsScriptRuntime_()) {
+        data = await callAppsScript_("apiGetSubjects", []);
+      } else {
+        const apiUrl = resolveApiUrl();
+        if (!apiUrl) return;
+        const cb = `btaSubjectsCb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        const sep = apiUrl.includes("?") ? "&" : "?";
+        const src = `${apiUrl}${sep}action=subjects&callback=${encodeURIComponent(cb)}`;
+        data = await callJsonp(src, 15000);
+      }
+      if (data && data.ok === false) throw new Error(data.message || "Subject sync failed.");
+      setSubjectsFromServer_(data && data.items);
+      appendLog("OK", "Subjects synced", { count: subjects.length });
+    }
+
+    function statusBadge(status) {
+      const s = String(status || "Draft");
+      if (s === "Approved") return `<span class="pill" style="background:#e7f7ea;color:#127a2a;">Approved</span>`;
+      if (s === "Pending") return `<span class="pill" style="background:#fff4db;color:#8a5a00;">Pending</span>`;
+      if (s === "Rejected") return `<span class="pill" style="background:#fdeaea;color:#a82020;">Rejected</span>`;
+      return `<span class="pill">Draft</span>`;
+    }
+
+    function selfOwnedBadge(row) {
+      return String((row && row.ownerMode) || "") === "self"
+        ? `<span class="pill" style="background:#e8f0ff;color:#1f4fa3;">Self-owned</span>`
+        : "";
+    }
+
+    function approvedJamBeban(status, jamBeban) {
+      return String(status || "") === "Approved" ? Number(jamBeban || 0) : 0;
+    }
+
+    function hydrateRows() {
+      rows.forEach((r) => {
+        if (!r.recordId) r.recordId = makeId();
+        if (!r.createdAt) r.createdAt = new Date().toISOString();
+        if (!r.verifyStatus) r.verifyStatus = "Draft";
+        if (!("verifyRequestId" in r)) r.verifyRequestId = "";
+        if (!("verifyNote" in r)) r.verifyNote = "";
+        if (!("helperEmail" in r)) r.helperEmail = "";
+        if (!("ownerEmail" in r)) r.ownerEmail = "";
+        if (!("ownerMode" in r)) r.ownerMode = (r.ownerEmail && r.helperEmail && r.ownerEmail === r.helperEmail) ? "self" : "l2";
+      });
+    }
+
+    async function submitRowForVerification(row) {
+      const isSelfOwned = String(row.ownerMode || "") === "self";
+      if (isSelfOwned) {
+        appendLog("INFO", "Self-owned row auto-approved", { record_id: row.recordId, subject: row.subject });
+        return {
+          ok: true,
+          status: "Approved",
+          request_id: row.recordId,
+          message: "Self-owned subject (L1/Me): email approval skipped."
+        };
+      }
+
+      const payload = {
+        action: "submit",
+        record: {
+          record_id: row.recordId,
+          created_at: row.createdAt,
+          subject_code: row.subject,
+          semester: row.semester,
+          kredit: row.kredit,
+          jam_minggu: row.jamMinggu,
+          peringkat: row.peringkat,
+          jenis: row.jenis,
+          kumpulan: row.kumpulan,
+          schedule: row.dateDisplay,
+          date_input: row.dateInput || "",
+          week: row.week || "",
+          bil_pelajar: row.pelajar,
+          helper_lecturer_email: row.helperEmail,
+          owner_lecturer_email: row.ownerEmail,
+          jam_beban: row.jamBebanCalc || 0,
+          status: "Pending"
+        }
+      };
+
+      let result = {};
+      if (canUseAppsScriptRuntime_()) {
+        appendLog("INFO", "Submitting row", { record_id: row.recordId, api: "google.script.run", subject: row.subject });
+        result = await callAppsScript_("apiSubmitVerifyRecord", [payload.record]);
+      } else {
+        const apiUrl = resolveApiUrl();
+        if (!apiUrl) throw new Error("Open from deployed Web App /exec URL.");
+        appendLog("INFO", "Submitting row", { record_id: row.recordId, api: apiUrl, subject: row.subject });
+        try {
+          const resp = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify(payload)
+          });
+          const raw = await resp.text();
+          try {
+            result = raw ? JSON.parse(raw) : {};
+          } catch (_) {
+            const preview = String(raw || "").slice(0, 80).replace(/\s+/g, " ");
+            appendLog("ERROR", "Non-JSON response from submit API", { record_id: row.recordId, preview: preview });
+            throw new Error(`API returned non-JSON response. Check /exec URL, deployment access, and UniMAP sign-in. Response starts: "${preview}"`);
+          }
+          if (!resp.ok) throw new Error((result && result.message) || `API error (${resp.status})`);
+        } catch (err) {
+          const errMsg = String((err && err.message) || "");
+          appendLog("WARN", "POST submit blocked, fallback to JSONP submit", { record_id: row.recordId, error: errMsg });
+          const cb = `btaSubmitCb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+          const sep = apiUrl.includes("?") ? "&" : "?";
+          const submitUrl = `${apiUrl}${sep}action=submit&record=${encodeURIComponent(JSON.stringify(payload.record))}&callback=${encodeURIComponent(cb)}`;
+          result = await callJsonp(submitUrl, 15000);
+        }
+      }
+
+      if (result && result.ok === false) throw new Error(result.message || "Submit failed.");
+      appendLog("OK", "Submit accepted", { record_id: row.recordId, request_id: (result && (result.request_id || result.requestId)) || row.recordId });
+      return {
+        ok: Boolean(result && result.ok !== false),
+        status: "Pending",
+        request_id: (result && (result.request_id || result.requestId)) || row.recordId,
+        message: (result && result.message) || "Submitted to owner."
+      };
+    }
+
+    async function submitPendingForVerification() {
+      const pendingRows = rows.filter(r => r.verifyStatus === "Draft" || r.verifyStatus === "Rejected");
+      if (!pendingRows.length) {
+        showStatus(els.statusVerify, "Nothing to submit");
+        appendLog("INFO", "No pending rows to submit");
+        return;
+      }
+      appendLog("INFO", "Submitting pending rows", { count: pendingRows.length });
+
+      let ok = 0;
+      let fail = 0;
+
+      for (const row of pendingRows) {
+        try {
+          const result = await submitRowForVerification(row);
+          row.verifyStatus = result.status || "Pending";
+          row.verifyRequestId = result.request_id || result.requestId || "";
+          row.verifyNote = result.message || "Submitted to owner.";
+          await upsertRowToServer_(row);
+          ok += 1;
+        } catch (err) {
+          row.verifyNote = err.message || "Submit failed.";
+          appendLog("ERROR", "Submit failed", { record_id: row.recordId, error: row.verifyNote });
+          fail += 1;
+        }
+      }
+
+      render();
+      saveToCache();
+      if (fail === 0) {
+        els.msg.textContent = `Submitted ${ok} row(s) for owner verification.`;
+        showStatus(els.statusVerify, "Submitted");
+        appendLog("OK", "All pending rows submitted", { success: ok, failed: fail });
+      } else {
+        els.msg.innerHTML = `<span class="danger">Submitted ${ok}, failed ${fail}. Check API URL and deployment access.</span>`;
+        showStatus(els.statusVerify, "Partial");
+        appendLog("WARN", "Partial submit result", { success: ok, failed: fail });
+      }
+    }
+
+    async function refreshVerificationStatuses() {
+      const recordIds = rows.map(r => String(r.recordId || "").trim()).filter(Boolean);
+      if (!recordIds.length) {
+        showStatus(els.statusRefresh, "No rows");
+        appendLog("INFO", "Status refresh skipped: no rows");
+        return;
+      }
+      appendLog("INFO", "Refreshing verification statuses", { count: recordIds.length });
+      let data = {};
+      if (canUseAppsScriptRuntime_()) {
+        data = await callAppsScript_("apiGetStatuses", [recordIds.join(",")]);
+      } else {
+        const apiUrl = resolveApiUrl();
+        if (!apiUrl) {
+          showStatus(els.statusRefresh, "Missing URL");
+          appendLog("ERROR", "Status refresh blocked: missing Web App URL");
+          return;
+        }
+        const callbackName = `btaStatusCb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        const sep = apiUrl.includes("?") ? "&" : "?";
+        const src = `${apiUrl}${sep}action=statuses&record_ids=${encodeURIComponent(recordIds.join(","))}&callback=${encodeURIComponent(callbackName)}`;
+        data = await new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          const timeout = setTimeout(() => {
+            cleanup();
+            reject(new Error("Status refresh timeout."));
+          }, 12000);
+
+          function cleanup() {
+            clearTimeout(timeout);
+            try { delete window[callbackName]; } catch (_) { window[callbackName] = undefined; }
+            if (script.parentNode) script.parentNode.removeChild(script);
+          }
+
+          window[callbackName] = (payload) => {
+            cleanup();
+            resolve(payload || {});
+          };
+
+          script.onerror = () => {
+            cleanup();
+            reject(new Error("Unable to load status endpoint."));
+          };
+          script.src = src;
+          document.head.appendChild(script);
+        });
+      }
+
+      const items = Array.isArray(data.items) ? data.items : [];
+      const byId = new Map(items.map(i => [String(i.record_id || ""), i]));
+      let changed = 0;
+
+      rows.forEach((r) => {
+        const hit = byId.get(String(r.recordId || ""));
+        if (!hit) return;
+        const nextStatus = String(hit.status || r.verifyStatus || "Draft");
+        const approver = String(hit.approver_email || "");
+        const comment = String(hit.approver_comment || "");
+        const noteParts = [];
+        if (approver) noteParts.push(`By ${approver}`);
+        if (comment) noteParts.push(comment);
+        const nextNote = noteParts.join(" | ");
+
+        if (r.verifyStatus !== nextStatus || (nextNote && r.verifyNote !== nextNote)) {
+          r.verifyStatus = nextStatus;
+          if (nextNote) r.verifyNote = nextNote;
+          changed += 1;
+          void upsertRowToServer_(r).catch((err) => {
+            appendLog("ERROR", "Persist status sync failed", { record_id: r.recordId, error: String(err && err.message || err) });
+          });
+        }
+      });
+
+      render();
+      saveToCache();
+      showStatus(els.statusRefresh, changed ? "Updated" : "No change");
+      appendLog("OK", "Status refresh completed", { changed: changed });
+    }
+
+    // --- Progress Bar Update ---
+    function updateProgressBar() {
+      const total = parseFloat(els.totalJam.textContent) || 0;
+      const maxTarget = parseFloat(els.maxTarget.value) || 100;
+      const pct = Math.min(100, Math.round((total / maxTarget) * 100));
+      els.percentage.textContent = pct;
+      
+      let bgColor = "#4caf50"; // green
+      if (pct > 100) {
+        bgColor = "#f44336"; // red (over)
+      } else if (pct > 80) {
+        bgColor = "#ff9800"; // orange (warning)
+      }
+      
+      els.progressBar.style.width = pct + "%";
+      els.progressBar.style.backgroundColor = bgColor;
+      els.progressBar.textContent = pct > 5 ? pct + "%" : "";
+    }
+
+    // --- Subject Management ---
+    function renderSubjects() {
+      // Update subject dropdown
+      const currentValue = els.subject.value;
+      els.subject.innerHTML = `<option value="">-- Select Subject --</option>` + 
+        subjects.map(s => `<option value="${s}">${s}</option>`).join("");
+      els.subject.value = currentValue;
+      applyOwnerBySubject_(false);
+    }
+
+    function renderSemesters() {
+      els.semesterList.innerHTML = semesters
+        .map((s, idx) => `
+          <span class="pill">
+            ${s}
+            <button class="secondary" style="padding: 2px 6px; font-size: 11px; margin-left: 4px;" data-del-semester="${idx}">x</button>
+          </span>
+        `)
+        .join("");
+
+      const currentValue = els.semester.value;
+      els.semester.innerHTML = `<option value="">-- Select Semester --</option>` +
+        semesters.map(s => `<option value="${s}">${s}</option>`).join("");
+      els.semester.value = currentValue || semesters[0] || "";
+    }
+
+    function addSemester() {
+      const value = els.newSemester.value.trim();
+      if (!value) {
+        els.msg.innerHTML = `<span class="danger">Please enter a semester value.</span>`;
+        return;
+      }
+      if (semesters.includes(value)) {
+        els.msg.innerHTML = `<span class="danger">Semester already registered.</span>`;
+        return;
+      }
+      semesters.push(value);
+      els.newSemester.value = "";
+      renderSemesters();
+      els.msg.textContent = `Semester "${value}" registered!`;
+      setTimeout(() => (els.msg.textContent = ""), 2000);
+    }
+
+    els.addSemesterBtn.addEventListener("click", addSemester);
+    els.newSemester.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") addSemester();
+    });
+
+    document.getElementById("semesterList").addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-del-semester]");
+      if (!btn) return;
+      const idx = Number(btn.getAttribute("data-del-semester"));
+      if (Number.isFinite(idx)) {
+        const removed = semesters.splice(idx, 1);
+        renderSemesters();
+        els.msg.textContent = `Semester "${removed[0]}" removed.`;
+        setTimeout(() => (els.msg.textContent = ""), 2000);
+      }
+    });
+
+    // --- File Export/Import functions ---
+    async function exportData() {
+      if (rows.length === 0) {
+        els.msg.innerHTML = `<span class="danger">No data to export.</span>`;
+        return;
+      }
+      const dataStr = JSON.stringify({ subjects, semesters, rows }, null, 2);
+      const fileName = buildBackupFileName();
+      const overwrite = window.confirm("Overwrite existing backup file? Click Cancel to create a new file.");
+
+      if (window.showSaveFilePicker) {
+        let handle = null;
+        try {
+          handle = await idbGet(HANDLE_KEY);
+        } catch (err) {
+          handle = null;
+        }
+
+        try {
+          if (!handle || !overwrite) {
+            handle = await window.showSaveFilePicker({
+              suggestedName: fileName,
+              types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+            });
+            await idbSet(HANDLE_KEY, handle);
+          }
+          const writable = await handle.createWritable();
+          await writable.write(dataStr);
+          await writable.close();
+          const savedName = handle && handle.name ? handle.name : fileName;
+          els.msg.textContent = `Backup saved: ${savedName}`;
+          showStatus(els.statusBackup, "Saved");
+          setTimeout(() => updatePreview(), 2000);
+          return;
+        } catch (err) {
+          // Fallback to download if picker denied or handle invalid.
+        }
+      }
+
+      const dataBlob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+      els.msg.textContent = `Backup downloaded: ${fileName}`;
+      showStatus(els.statusBackup, "Downloaded");
+      setTimeout(() => updatePreview(), 2000);
+    }
+
+    function importData() {
+      els.importFile.click();
+      showStatus(els.statusImport, "Choose file", 1500);
+    }
+
+    function saveToCache() {
+      const payload = {
+        subjects,
+        semesters,
+        rows,
+        maxTarget: Number(els.maxTarget.value) || 0
+      };
+      localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+      if (els.backupName) {
+        localStorage.setItem(NAME_KEY, els.backupName.value || "");
+      }
+      els.saveCacheBtn.classList.remove("saving");
+      void els.saveCacheBtn.offsetWidth;
+      els.saveCacheBtn.classList.add("saving");
+      els.msg.textContent = "Saved to browser cache.";
+      showStatus(els.statusSave, "Saved");
+      setTimeout(() => {
+        if (els.msg.textContent === "Saved to browser cache.") {
+          els.msg.textContent = "";
+        }
+      }, 2000);
+    }
+
+    function clearCache() {
+      const ok = window.confirm("Are you sure you want to clear the saved cache?");
+      if (!ok) {
+        showStatus(els.statusClearCache, "Canceled");
+        return;
+      }
+      localStorage.removeItem(CACHE_KEY);
+      localStorage.removeItem(NAME_KEY);
+      subjects.length = 0;
+      renderSubjects();
+      if (els.backupName) els.backupName.value = "";
+      showStatus(els.statusClearCache, "Cleared");
+      els.msg.textContent = "Cache cleared.";
+      setTimeout(() => updatePreview(), 2000);
+    }
+
+    function loadFromCache() {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (!raw) return false;
+        const cached = JSON.parse(raw);
+        if (cached.subjects && Array.isArray(cached.subjects)) {
+          subjects.length = 0;
+          subjects.push(...cached.subjects);
+          renderSubjects();
+        }
+        if (cached.semesters && Array.isArray(cached.semesters)) {
+          semesters.length = 0;
+          semesters.push(...cached.semesters);
+          renderSemesters();
+        }
+        if (cached.rows && Array.isArray(cached.rows)) {
+          rows.length = 0;
+          rows.push(...cached.rows);
+          hydrateRows();
+        }
+        if (Number.isFinite(cached.maxTarget)) {
+          els.maxTarget.value = cached.maxTarget;
+        }
+        if (els.backupName) {
+          const savedName = localStorage.getItem(NAME_KEY);
+          // Keep server-provided display name when available; use cache only if field is empty.
+          if (!String(els.backupName.value || "").trim() && savedName !== null) {
+            els.backupName.value = savedName;
+          }
+        }
+        render();
+        updatePreview();
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    const MAX_IMPORT_ROWS = 1000;
+    const MAX_IMPORT_ITEMS = 500;
+
+    function sanitizeText_(value, maxLen = 120) {
+      return String(value == null ? "" : value).trim().slice(0, maxLen);
+    }
+
+    function toFiniteNumber_(value, fallback = 0) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
+    function normalizeStatus_(value) {
+      const s = String(value || "").trim();
+      if (s === "Draft" || s === "Pending" || s === "Approved" || s === "Rejected") return s;
+      return "Draft";
+    }
+
+    function normalizeOwnerMode_(value, ownerEmail, helperEmail) {
+      const raw = String(value || "").trim().toLowerCase();
+      if (raw === "self") return "self";
+      if (raw === "l2") return "l2";
+      return ownerEmail && ownerEmail === helperEmail ? "self" : "l2";
+    }
+
+    function sanitizeStringList_(arr, label) {
+      if (!Array.isArray(arr)) throw new Error(`${label} must be an array.`);
+      if (arr.length > MAX_IMPORT_ITEMS) throw new Error(`${label} too many items (max ${MAX_IMPORT_ITEMS}).`);
+      const out = [];
+      const seen = new Set();
+      for (let i = 0; i < arr.length; i++) {
+        const v = sanitizeText_(arr[i], 120);
+        if (!v) continue;
+        const key = v.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(v);
+      }
+      return out;
+    }
+
+    function sanitizeImportedRow_(input, idx, helperEmail) {
+      if (!input || typeof input !== "object" || Array.isArray(input)) {
+        throw new Error(`Row ${idx + 1}: invalid row object.`);
+      }
+      const rowHelperEmail = sanitizeText_(input.helperEmail, 120).toLowerCase();
+      if (!rowHelperEmail) {
+        throw new Error(`Row ${idx + 1}: helperEmail is required in file.`);
+      }
+      if (!isUniMAPEmail(rowHelperEmail)) {
+        throw new Error(`Row ${idx + 1}: helperEmail must be @unimap.edu.my.`);
+      }
+      if (rowHelperEmail !== helperEmail) {
+        throw new Error(`Row ${idx + 1}: helperEmail mismatch (file: ${rowHelperEmail}, expected: ${helperEmail}).`);
+      }
+
+      const subject = sanitizeText_(input.subject, 80);
+      const semester = sanitizeText_(input.semester, 80);
+      const kredit = toFiniteNumber_(input.kredit, 0);
+      const jamMinggu = toFiniteNumber_(input.jamMinggu, 0);
+      const peringkat = sanitizeText_(input.peringkat, 80);
+      const jenis = sanitizeText_(input.jenis, 80);
+      const kumpulan = sanitizeText_(input.kumpulan, 80);
+      const pelajar = toFiniteNumber_(input.pelajar, 0);
+      const rawWeek = Math.trunc(toFiniteNumber_(input.week, 1));
+      const week = rawWeek >= 1 && rawWeek <= 15 ? rawWeek : 1;
+      const dateInput = sanitizeText_(input.dateInput, 20);
+      const kuliah = isKuliah(jenis);
+      const dateDisplay = kuliah ? `Week ${week}` : formatDateDisplay(dateInput);
+
+      let ownerEmail = sanitizeText_(input.ownerEmail, 120).toLowerCase();
+      let ownerMode = normalizeOwnerMode_(input.ownerMode, ownerEmail, helperEmail);
+      if (ownerMode === "self") ownerEmail = helperEmail;
+
+      if (!subject) throw new Error(`Row ${idx + 1}: subject is required.`);
+      if (!semester) throw new Error(`Row ${idx + 1}: semester is required.`);
+      if (kredit < 0) throw new Error(`Row ${idx + 1}: kredit must be >= 0.`);
+      if (jamMinggu < 0) throw new Error(`Row ${idx + 1}: jamMinggu must be >= 0.`);
+      if (pelajar < 0) throw new Error(`Row ${idx + 1}: pelajar must be >= 0.`);
+      if (!isUniMAPEmail(helperEmail)) throw new Error(`Row ${idx + 1}: invalid current lecturer email.`);
+      if (ownerMode !== "self" && !isUniMAPEmail(ownerEmail)) {
+        throw new Error(`Row ${idx + 1}: ownerEmail must be @unimap.edu.my.`);
+      }
+
+      const created = new Date(input.createdAt);
+      const createdAt = Number.isNaN(created.getTime()) ? new Date().toISOString() : created.toISOString();
+
+      return {
+        subject,
+        semester,
+        kredit,
+        jamMinggu,
+        peringkat,
+        jenis,
+        kumpulan,
+        dateInput,
+        dateDisplay,
+        week,
+        pelajar,
+        helperEmail,
+        ownerMode,
+        ownerEmail,
+        verifyStatus: normalizeStatus_(input.verifyStatus),
+        verifyRequestId: sanitizeText_(input.verifyRequestId, 120),
+        verifyNote: sanitizeText_(input.verifyNote, 400),
+        recordId: sanitizeText_(input.recordId, 120) || makeId(),
+        createdAt,
+        minggu: 1,
+      };
+    }
+
+    function sanitizeImportedPayload_(imported) {
+      if (!imported || typeof imported !== "object" || Array.isArray(imported)) {
+        throw new Error("Invalid JSON format. Expected object.");
+      }
+      let helperEmail = sanitizeText_(els.lecturerEmail && els.lecturerEmail.value, 120).toLowerCase();
+
+      const nextSubjects = Array.isArray(imported.subjects)
+        ? sanitizeStringList_(imported.subjects, "subjects")
+        : [];
+      const nextSemesters = Array.isArray(imported.semesters)
+        ? sanitizeStringList_(imported.semesters, "semesters")
+        : [];
+
+      if (!Array.isArray(imported.rows)) throw new Error("rows must be an array.");
+      if (imported.rows.length > MAX_IMPORT_ROWS) {
+        throw new Error(`Too many rows (${imported.rows.length}). Max ${MAX_IMPORT_ROWS}.`);
+      }
+
+      const uniqueHelpers = new Set(
+        imported.rows
+          .map((r) => sanitizeText_(r && r.helperEmail, 120).toLowerCase())
+          .filter(Boolean)
+      );
+
+      // Fallback for non-templated runtime: derive helper email from import rows.
+      if (!isUniMAPEmail(helperEmail)) {
+        if (uniqueHelpers.size === 1) {
+          const only = Array.from(uniqueHelpers)[0];
+          if (isUniMAPEmail(only)) {
+            helperEmail = only;
+            if (els.lecturerEmail) els.lecturerEmail.value = only;
+            syncNameFromLecturerEmail_();
+          }
+        } else if (uniqueHelpers.size > 1) {
+          throw new Error(`File error: helperEmail is inconsistent across rows (${Array.from(uniqueHelpers).join(", ")}).`);
+        }
+      } else if (uniqueHelpers.size > 0) {
+        const mismatched = Array.from(uniqueHelpers).filter((x) => x !== helperEmail);
+        if (mismatched.length) {
+          throw new Error(`File error: helperEmail in file does not match current lecturer (${helperEmail}).`);
+        }
+      }
+      if (!isUniMAPEmail(helperEmail)) {
+        throw new Error("Current lecturer email is invalid. Open via deployed /exec or ensure all imported rows use one valid helperEmail @unimap.edu.my.");
+      }
+
+      const nextRows = imported.rows.map((r, idx) => sanitizeImportedRow_(r, idx, helperEmail));
+
+      const nextMaxTarget = toFiniteNumber_(imported.maxTarget, Number(els.maxTarget.value) || 0);
+      return { nextSubjects, nextSemesters, nextRows, nextMaxTarget };
+    }
+
+    function readInputs() {
+      const subject = els.subject.value.trim();
+      const semester = els.semester.value.trim();
+      const kredit = Number(els.kredit.value);
+      const jamMinggu = Number(els.jamMinggu.value);
+      const peringkat = els.peringkat.value;
+      const jenis = els.jenis.value;
+      const kumpulan = els.kumpulan.value;
+      const dateInput = els.dateInput.value;
+      const week = Number(els.weekInput.value) || 1;
+      const kuliah = isKuliah(jenis);
+      const dateDisplay = kuliah ? `Week ${week}` : formatDateDisplay(dateInput);
+      const pelajar = Number(els.pelajar.value);
+      const helperEmail = String(els.lecturerEmail.value || "").trim();
+      const selectedSubject = String(subject || "").trim().toUpperCase();
+      const mappedOwner = String(subjectOwnerMap[selectedSubject] || "").trim().toLowerCase();
+      const ownerEmail = mappedOwner;
+      const ownerMode = ownerEmail && ownerEmail === String(helperEmail || "").trim().toLowerCase() ? "self" : "l2";
+      const minggu = 1;
+
+      const problems = [];
+      if (!semester) problems.push("Semester");
+      if (!Number.isFinite(kredit) || kredit < 0) problems.push("Kredit");
+      if (!Number.isFinite(jamMinggu) || jamMinggu < 0) problems.push("Jam Pertemuan (Mingguan)");
+      if (!Number.isFinite(pelajar) || pelajar < 0) problems.push("Bilangan Pelajar");
+      if (kuliah && (!Number.isFinite(week) || week < 1 || week > 15)) problems.push("Week (1-15)");
+      if (!isUniMAPEmail(helperEmail)) problems.push("Lecturer Email (L1 @unimap.edu.my)");
+      if (ownerMode !== "self" && !ownerEmail) problems.push("Owner mapping not found for selected subject");
+      if (ownerMode !== "self" && !isUniMAPEmail(ownerEmail)) problems.push("Owner Email (L2 @unimap.edu.my)");
+      return {
+        subject,
+        semester,
+        kredit,
+        jamMinggu,
+        peringkat,
+        jenis,
+        kumpulan,
+        dateInput,
+        dateDisplay,
+        week,
+        pelajar,
+        helperEmail,
+        ownerMode,
+        ownerEmail,
+        minggu,
+        problems
+      };
+    }
+
+    async function persistRowsBestEffort_(list, actionLabel) {
+      let failed = 0;
+      for (const row of list) {
+        try {
+          await upsertRowToServer_(row);
+        } catch (err) {
+          failed += 1;
+          appendLog("ERROR", "Admin persist failed", {
+            action: actionLabel,
+            record_id: row.recordId,
+            error: String(err && err.message || err)
+          });
+        }
+      }
+      if (failed) {
+        appendLog("WARN", "Admin persist completed with failures", { action: actionLabel, failed: failed, total: list.length });
+      } else {
+        appendLog("OK", "Admin persist completed", { action: actionLabel, total: list.length });
+      }
+    }
+
+    async function applyAdminBulkStatus_() {
+      if (!adminState.unlocked) {
+        showStatus(els.adminMsg, "Locked");
+        return;
+      }
+      const nextStatus = normalizeStatus_(els.adminBulkStatus.value);
+      if (!rows.length) {
+        appendLog("INFO", "Bulk status skipped: no rows");
+        return;
+      }
+      rows.forEach((row) => {
+        row.verifyStatus = nextStatus;
+        row.verifyNote = `Admin override -> ${nextStatus}`;
+        if (nextStatus !== "Pending") row.verifyRequestId = "";
+      });
+      render();
+      saveToCache();
+      await persistRowsBestEffort_(rows, "bulk_status");
+      showStatus(els.adminMsg, `Rows set to ${nextStatus}`, 2000);
+    }
+
+    async function rebindOwnersFromSubjectMap_() {
+      if (!adminState.unlocked) {
+        showStatus(els.adminMsg, "Locked");
+        return;
+      }
+      if (!rows.length) {
+        appendLog("INFO", "Owner rebind skipped: no rows");
+        return;
+      }
+      let changed = 0;
+      let missing = 0;
+      rows.forEach((row) => {
+        const code = String(row.subject || "").trim().toUpperCase();
+        const mapped = String(subjectOwnerMap[code] || "").trim().toLowerCase();
+        if (!mapped) {
+          missing += 1;
+          return;
+        }
+        if (row.ownerEmail !== mapped || row.ownerMode !== "l2") {
+          row.ownerMode = "l2";
+          row.ownerEmail = mapped;
+          changed += 1;
+        }
+      });
+      render();
+      saveToCache();
+      if (changed) {
+        await persistRowsBestEffort_(rows, "rebind_owners");
+      }
+      appendLog("INFO", "Owner rebind result", { changed: changed, missing_map: missing });
+      showStatus(els.adminMsg, changed ? "Owners rebound" : "No owner change", 2000);
+    }
+
+    function render() {
+      els.tbody.innerHTML = "";
+      els.summaryBody.innerHTML = "";
+      let totalApproved = 0;
+      const grouped = new Map();
+
+      rows.forEach((r, idx) => {
+        const calc = calcAll({
+          jamPertemuanMingguan: r.jamMinggu,
+          jenis: r.jenis,
+          kumpulan: r.kumpulan,
+          bilanganPelajar: r.pelajar,
+          bilanganMinggu: 1
+        });
+        const w = calc.wajaran;
+        const jp = calc.jamPelajar;
+        const jb = calc.jamBeban;
+        const ajb = approvedJamBeban(r.verifyStatus, jb);
+        r.jamBebanCalc = jb;
+        totalApproved += ajb;
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${idx + 1}</td>
+          <td>${r.subject || "--"}</td>
+          <td class="num">${r.kredit}</td>
+          <td class="num">${r.semester ?? ""}</td>
+          <td class="num">${r.jamMinggu}</td>
+          <td>${r.peringkat ?? ""}</td>
+          <td>${r.jenis}</td>
+          <td>${r.kumpulan}</td>
+          <td>${r.dateDisplay ?? ""}</td>
+          <td class="num">${r.pelajar}</td>
+          <td>${r.ownerEmail || ""}</td>
+          <td>${statusBadge(r.verifyStatus)}${selfOwnedBadge(r)}${r.verifyNote ? `<div class="muted">${r.verifyNote}</div>` : ""}</td>
+          <td class="num">${jp.toFixed(1)}</td>
+          <td class="num">${w.toFixed(1)}</td>
+          <td class="num"><strong>${jb.toFixed(1)}</strong></td>
+          <td class="num"><strong>${ajb.toFixed(1)}</strong></td>
+          <td>
+            <button class="secondary" data-submit="${idx}" ${r.verifyStatus === "Pending" || r.verifyStatus === "Approved" ? "disabled" : ""}>Send</button>
+            <button class="secondary" data-del="${idx}">Delete</button>
+          </td>
+        `;
+        els.tbody.appendChild(tr);
+
+        const key = `${r.subject}||${r.jenis}||${r.kumpulan}`;
+        const entry = grouped.get(key) || {
+          subject: r.subject || "--",
+          kredit: r.kredit,
+          semester: r.semester ?? "",
+          jamMinggu: r.jamMinggu,
+          peringkat: r.peringkat ?? "",
+          jenis: r.jenis,
+          kumpulan: r.kumpulan,
+          pelajar: r.pelajar,
+          minggu: 0,
+          jamBeban: 0,
+          approvedJamBeban: 0,
+          jamPelajar: 0,
+          wajaran: 0
+        };
+        entry.minggu += 1;
+        entry.jamBeban += jb;
+        entry.approvedJamBeban += ajb;
+        entry.jamPelajar += jp;
+        entry.wajaran = w;
+        grouped.set(key, entry);
+      });
+
+      // total approved score (approval-dependent)
+      els.totalJam.textContent = round1(totalApproved).toFixed(1);
+      updateProgressBar();
+
+      els.msg.textContent = rows.length
+        ? "This matches the sheet pattern you showed (incl. Jam Pelajar >30 and 1-decimal Jam Beban)."
+        : "No rows yet -- add one above.";
+
+      let sIdx = 1;
+      grouped.forEach((g) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${sIdx++}</td>
+          <td>${g.subject}</td>
+          <td class="num">${g.kredit}</td>
+          <td class="num">${g.semester}</td>
+          <td class="num">${g.jamMinggu}</td>
+          <td>${g.peringkat}</td>
+          <td>${g.jenis}</td>
+          <td>${g.kumpulan}</td>
+          <td class="num">${g.pelajar}</td>
+          <td class="num">${g.minggu}</td>
+          <td class="num">${round1(g.jamPelajar).toFixed(1)}</td>
+          <td class="num">${Number(g.wajaran).toFixed(1)}</td>
+          <td class="num"><strong>${round1(g.jamBeban).toFixed(1)}</strong></td>
+          <td class="num"><strong>${round1(g.approvedJamBeban).toFixed(1)}</strong></td>
+        `;
+        els.summaryBody.appendChild(tr);
+      });
+    }
+
+    function updatePreview() {
+      const { jamMinggu, jenis, pelajar, minggu, kumpulan, problems } = readInputs();
+      if (problems.length) {
+        els.preview.innerHTML = `<span class="danger">Check: ${problems.join(", ")}</span>`;
+        return;
+      }
+      const calc = calcAll({
+        jamPertemuanMingguan: jamMinggu,
+        jenis,
+        kumpulan,
+        bilanganPelajar: pelajar,
+        bilanganMinggu: 1
+      });
+      els.preview.textContent = `Preview -> Wajaran Beban Seminggu: ${calc.wajaran.toFixed(1)}, Jam Pelajar(>30): ${calc.jamPelajar.toFixed(1)}, Jam Beban: ${calc.jamBeban.toFixed(1)}`;
+    }
+
+    els.addBtn.addEventListener("click", async () => {
+      const data = readInputs();
+      if (data.problems.length) {
+        els.msg.innerHTML = `<span class="danger">Please fix: ${data.problems.join(", ")}.</span>`;
+        showStatus(els.statusAdd, "Fix inputs");
+        return;
+      }
+      const row = {
+        subject: data.subject,
+        semester: data.semester,
+        kredit: data.kredit,
+        jamMinggu: data.jamMinggu,
+        peringkat: data.peringkat,
+        jenis: data.jenis,
+        kumpulan: data.kumpulan,
+        dateInput: data.dateInput,
+        dateDisplay: data.dateDisplay,
+        week: data.week,
+        pelajar: data.pelajar,
+        helperEmail: data.helperEmail,
+        ownerMode: data.ownerMode,
+        ownerEmail: data.ownerEmail,
+        verifyStatus: data.ownerMode === "self" ? "Approved" : "Draft",
+        verifyRequestId: "",
+        verifyNote: data.ownerMode === "self" ? "Self-owned subject (L1/Me): email approval skipped." : "",
+        recordId: makeId(),
+        createdAt: new Date().toISOString(),
+        minggu: 1,
+      };
+      try {
+        await upsertRowToServer_(row);
+        await syncRowsFromServer_();
+        updatePreview();
+        showStatus(els.statusAdd, "Added");
+      } catch (err) {
+        const msg = err && err.message ? err.message : "Add failed.";
+        els.msg.innerHTML = `<span class="danger">${msg}</span>`;
+        appendLog("ERROR", "Add row failed", { error: msg });
+        showStatus(els.statusAdd, "Error");
+      }
+    });
+
+    document.getElementById("tbl").addEventListener("click", (e) => {
+      const submitBtn = e.target.closest("button[data-submit]");
+      if (submitBtn) {
+        const idx = Number(submitBtn.getAttribute("data-submit"));
+        if (Number.isFinite(idx) && rows[idx]) {
+          const row = rows[idx];
+          if (row.verifyStatus === "Pending" || row.verifyStatus === "Approved") return;
+          submitRowForVerification(row)
+            .then((result) => {
+              row.verifyStatus = result.status || "Pending";
+              row.verifyRequestId = result.request_id || result.requestId || "";
+              row.verifyNote = result.message || "Submitted to owner.";
+              appendLog("OK", "Single row submit completed", { record_id: row.recordId, status: row.verifyStatus });
+              render();
+              saveToCache();
+              showStatus(els.statusVerify, "Submitted");
+            })
+            .catch((err) => {
+              row.verifyNote = err.message || "Submit failed.";
+              appendLog("ERROR", "Single row submit failed", { record_id: row.recordId, error: row.verifyNote });
+              render();
+              showStatus(els.statusVerify, "Error");
+            });
+        }
+        return;
+      }
+
+      const btn = e.target.closest("button[data-del]");
+      if (!btn) return;
+      const idx = Number(btn.getAttribute("data-del"));
+      if (Number.isFinite(idx)) {
+        const row = rows[idx];
+        rows.splice(idx, 1);
+        render();
+        if (row && row.recordId) {
+          void deleteRowOnServer_(row.recordId, row.helperEmail || els.lecturerEmail.value)
+            .then(() => {
+              appendLog("OK", "Row deleted in All_lecturer_record", { record_id: row.recordId });
+              saveToCache();
+            })
+            .catch((err) => {
+              appendLog("ERROR", "Delete row failed", { record_id: row.recordId, error: String(err && err.message || err) });
+            });
+        }
+      }
+    });
+
+    els.submitVerifyBtn.addEventListener("click", () => {
+      void submitPendingForVerification();
+    });
+    els.refreshStatusBtn.addEventListener("click", () => {
+      void refreshVerificationStatuses().catch((err) => {
+        const msg = err && err.message ? err.message : "Refresh failed.";
+        showStatus(els.statusRefresh, "Error");
+        appendLog("ERROR", "Status refresh failed", { error: msg });
+      });
+    });
+    els.clearLogBtn.addEventListener("click", () => {
+      if (els.debugLog) els.debugLog.textContent = "";
+    });
+    els.saveCacheBtn.addEventListener("click", saveToCache);
+    els.clearCacheBtn.addEventListener("click", clearCache);
+    els.backupName.addEventListener("input", () => {
+      localStorage.setItem(NAME_KEY, els.backupName.value || "");
+    });
+    els.maxTarget.addEventListener("input", updateProgressBar);
+    els.maxTarget.addEventListener("change", updateProgressBar);
+    els.adminUnlockBtn.addEventListener("click", async () => {
+      const code = String(els.adminCode.value || "").trim();
+      if (!code) {
+        showStatus(els.adminMsg, "Enter secret code", 1500);
+        return;
+      }
+      try {
+        const hash = await sha256Hex_(code);
+        if (hash !== ADMIN_SECRET_HASH && code !== "BTA-ADMIN-2026") {
+          showStatus(els.adminMsg, "Invalid code", 1500);
+          appendLog("WARN", "Admin unlock failed");
+          return;
+        }
+        setAdminUnlocked_(true);
+        showStatus(els.adminMsg, "Unlocked", 2000);
+      } catch (err) {
+        appendLog("ERROR", "Admin unlock error", { error: String(err && err.message || err) });
+      }
+    });
+    els.adminLockBtn.addEventListener("click", () => {
+      if (els.adminCode) els.adminCode.value = "";
+      setAdminUnlocked_(false);
+      showStatus(els.adminMsg, "Locked", 1500);
+    });
+    els.adminApplyStatusBtn.addEventListener("click", () => {
+      void applyAdminBulkStatus_();
+    });
+    els.adminRebindOwnersBtn.addEventListener("click", () => {
+      void rebindOwnersFromSubjectMap_();
+    });
+    els.enterAppBtn.addEventListener("click", () => {
+      els.landingPage.classList.add("hidden");
+      els.appRoot.classList.remove("hidden");
+    });
+
+    ["subject","semester","kredit","jamMinggu","peringkat","jenis","kumpulan","dateInput","weekInput","pelajar","ownerEmail"].forEach(id => {
+      document.getElementById(id).addEventListener("input", updatePreview);
+      document.getElementById(id).addEventListener("change", updatePreview);
+    });
+    els.subject.addEventListener("change", () => {
+      applyOwnerBySubject_(true);
+      updatePreview();
+    });
+
+    els.jenis.addEventListener("change", () => {
+      updateScheduleInputMode();
+      updatePreview();
+    });
+
+    updatePreview();
+    appendLog("INFO", "App initialized");
+    const runtime = getRuntimeInfo();
+    appendLog("INFO", "Runtime detected", {
+      href: runtime.href,
+      pathname: runtime.pathname,
+      has_exec: runtime.hasExecPath,
+      preview: runtime.isPreview,
+      deployed_exec: runtime.isDeployedExec
+    });
+    if (!runtime.isDeployedExec && !canUseAppsScriptRuntime_()) {
+      appendLog("WARN", "Invalid runtime for API. Use deployed /exec URL.");
+    }
+    renderSubjects();
+    renderSemesters();
+    render();
+    loadFromCache();
+    void syncSubjectsFromServer_().catch((err) => {
+      appendLog("WARN", "Initial subject sync failed", { error: String(err && err.message || err) });
+    });
+    void syncRowsFromServer_().catch((err) => {
+      appendLog("WARN", "Initial sheet sync failed", { error: String(err && err.message || err) });
+    });
+    syncNameFromLecturerEmail_();
+    updateScheduleInputMode();
+    updateOwnerInputMode();
+
+    if (!els.dateInput.value) {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, "0");
+      const dd = String(today.getDate()).padStart(2, "0");
+      els.dateInput.value = `${yyyy}-${mm}-${dd}`;
+    }
+  </script>
 </body>
 </html>
