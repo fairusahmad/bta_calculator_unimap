@@ -309,18 +309,21 @@ function handleStatuses_(params) {
 function handleSubjects_() {
   const sh = getSubjectsSheet_();
   const values = sh.getDataRange().getValues();
-  if (values.length < 2) return { ok: true, items: [] };
+  if (values.length < 2) {
+    return { ok: true, items: [] };
+  }
   const idx = headersIndex_(values[0]);
   const items = [];
   for (let r = 1; r < values.length; r++) {
     const subjectCode = String(values[r][idx.subject_code] || "").trim();
-    const ownerEmail = normalizeEmail_(values[r][idx.owner_email]);
+    const ownerEmailsRaw = String(values[r][idx.owner_email] || "");
+    const ownerEmails = ownerEmailsRaw.split(';').map(function(e) { return normalizeEmail_(e); }).filter(function(e) { return !!e; });
     const isActive = String(values[r][idx.is_active] || "1").toLowerCase();
     if (!subjectCode) continue;
     if (isActive === "0" || isActive === "false" || isActive === "no") continue;
     items.push({
       subject_code: subjectCode,
-      owner_email: ownerEmail
+      owner_emails: ownerEmails
     });
   }
   return { ok: true, items: items };
@@ -328,25 +331,39 @@ function handleSubjects_() {
 
 function handleUpsertSubject_(subjectCodeRaw, ownerEmailRaw) {
   const subjectCode = String(subjectCodeRaw || "").trim().toUpperCase();
-  const ownerEmail = normalizeEmail_(ownerEmailRaw || DEFAULT_SUBJECT_OWNER_EMAIL);
+  const ownerEmails = String(ownerEmailRaw || DEFAULT_SUBJECT_OWNER_EMAIL)
+    .split(';')
+    .map(function(e) { return normalizeEmail_(e); })
+    .filter(function(e) { return !!e; });
+
   if (!subjectCode) throw new Error("Missing subject_code.");
-  if (!isUniMapEmail_(ownerEmail)) throw new Error("Invalid owner_email.");
+
+  for (var i = 0; i < ownerEmails.length; i++) {
+    if (!isUniMapEmail_(ownerEmails[i])) {
+      throw new Error("One or more owner_email values are invalid: " + ownerEmails[i]);
+    }
+  }
+
+  if (ownerEmails.length === 0) {
+    throw new Error("At least one valid owner_email is required.");
+  }
   enforceUniMapUser_();
 
   const sh = getSubjectsSheet_();
   const values = sh.getDataRange().getValues();
   const idx = headersIndex_(values[0]);
   let rowNo = -1;
-  for (let r = 1; r < values.length; r++) {
+  for (let r = 1; r < values.length; r++)
     if (String(values[r][idx.subject_code] || "").trim().toUpperCase() === subjectCode) {
-      rowNo = r + 1;
-      break;
+      {
+        rowNo = r + 1;
+        break;
+      }
     }
-  }
-
+  const ownerEmailString = ownerEmails.join(';');
   const payload = {
     subject_code: subjectCode,
-    owner_email: ownerEmail,
+    owner_email: ownerEmailString,
     updated_at: malaysiaNowIso_(),
     is_active: "1"
   };
@@ -357,7 +374,7 @@ function handleUpsertSubject_(subjectCodeRaw, ownerEmailRaw) {
     sh.getRange(rowNo, 1, 1, SUBJECTS_HEADERS.length).setValues([SUBJECTS_HEADERS.map((k) => payload[k])]);
   }
 
-  return { ok: true, subject_code: subjectCode, owner_email: ownerEmail };
+  return { ok: true, subject_code: subjectCode, owner_email: ownerEmailString };
 }
 
 function parseRecordParam_(raw) {

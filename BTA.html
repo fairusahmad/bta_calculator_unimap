@@ -282,6 +282,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
       <div id="ownerEmailWrap">
         <label for="ownerEmail">Subject Owner Email (L2)</label>
         <input id="ownerEmail" type="email" placeholder="Auto from subject mapping" readonly />
+        <select id="ownerEmailSelect" class="hidden"></select>
       </div>
 
     </div>
@@ -566,6 +567,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
       ownerEmailWrap: document.getElementById("ownerEmailWrap"),
       ownerEmail: document.getElementById("ownerEmail"),
       submitVerifyBtn: document.getElementById("submitVerifyBtn"),
+      ownerEmailSelect: document.getElementById("ownerEmailSelect"),
       statusVerify: document.getElementById("statusVerify"),
       refreshStatusBtn: document.getElementById("refreshStatusBtn"),
       statusRefresh: document.getElementById("statusRefresh"),
@@ -573,6 +575,11 @@ html, body { max-width: 100%; overflow-x: hidden; }
       clearLogBtn: document.getElementById("clearLogBtn"),
       debugLog: document.getElementById("debugLog"),
     };
+
+    // --- HTML changes ---
+    // In ownerEmailWrap div, add the following select element:
+    // <select id="ownerEmailSelect" class="hidden"></select>
+
 
     function isKuliah(jenis) {
       const j = String(jenis || "").trim();
@@ -936,11 +943,11 @@ html, body { max-width: 100%; overflow-x: hidden; }
       const source = Array.isArray(items) ? items : [];
       source.forEach((it) => {
         const code = String((it && (it.subject_code || it.subjectCode || it.subject)) || "").trim().toUpperCase();
-        const owner = String((it && (it.owner_email || it.ownerEmail)) || "").trim().toLowerCase();
+        const owners = (it && it.owner_emails) || [];
         if (!code || seen.has(code)) return;
         seen.add(code);
         list.push(code);
-        map[code] = owner;
+        map[code] = Array.isArray(owners) ? owners : [];
       });
 
       subjects.length = 0;
@@ -948,21 +955,27 @@ html, body { max-width: 100%; overflow-x: hidden; }
       Object.keys(subjectOwnerMap).forEach((k) => delete subjectOwnerMap[k]);
       Object.keys(map).forEach((k) => { subjectOwnerMap[k] = map[k]; });
       renderSubjects();
-      applyOwnerBySubject_(false);
+      applyOwnerBySubject_();
     }
 
-    function applyOwnerBySubject_(forceUpdate) {
+    function applyOwnerBySubject_() {
       const selected = String(els.subject.value || "").trim().toUpperCase();
-      if (!selected) {
-        els.ownerEmail.value = "";
-        return;
+      const owners = subjectOwnerMap[selected] || [];
+      const currentUser = String(els.lecturerEmail.value || "").trim().toLowerCase();
+      const isOwner = owners.includes(currentUser);
+      if (isOwner) {
+        els.ownerEmail.classList.remove("hidden");
+        els.ownerEmailSelect.classList.add("hidden");
+        els.ownerEmail.value = currentUser;
+        els.ownerEmail.readOnly = true;
+      } else {
+        els.ownerEmail.classList.add("hidden");
+        els.ownerEmailSelect.classList.remove("hidden");
+        els.ownerEmailSelect.innerHTML = owners.map(o => `<option value="${o}">${o}</option>`).join("");
+        if (owners.length === 0) {
+            els.ownerEmailSelect.innerHTML = `<option value="">-- No owner mapped --</option>`;
+        }
       }
-      const mappedOwner = String(subjectOwnerMap[selected] || "").trim().toLowerCase();
-      if (!mappedOwner) {
-        els.ownerEmail.value = "";
-        return;
-      }
-      els.ownerEmail.value = mappedOwner;
     }
 
     async function syncSubjectsFromServer_() {
@@ -1599,9 +1612,13 @@ html, body { max-width: 100%; overflow-x: hidden; }
       const dateDisplay = kuliah ? `Week ${week}` : formatDateDisplay(dateInput);
       const pelajar = Number(els.pelajar.value);
       const helperEmail = String(els.lecturerEmail.value || "").trim();
-      const selectedSubject = String(subject || "").trim().toUpperCase();
-      const mappedOwner = String(subjectOwnerMap[selectedSubject] || "").trim().toLowerCase();
-      const ownerEmail = mappedOwner;
+      let ownerEmail;
+      if (els.ownerEmailSelect.classList.contains('hidden')) {
+        ownerEmail = String(els.ownerEmail.value || "").trim().toLowerCase();
+      } else {
+        ownerEmail = String(els.ownerEmailSelect.value || "").trim().toLowerCase();
+      }
+
       const ownerMode = ownerEmail && ownerEmail === String(helperEmail || "").trim().toLowerCase() ? "self" : "l2";
       const minggu = 1;
 
@@ -1830,24 +1847,31 @@ html, body { max-width: 100%; overflow-x: hidden; }
       const submitBtn = e.target.closest("button[data-submit]");
       if (submitBtn) {
         const idx = Number(submitBtn.getAttribute("data-submit"));
-        if (Number.isFinite(idx) && rows[idx]) {
+        if (Number.isFinite(idx) && rows[idx] && !submitBtn.disabled) {
           const row = rows[idx];
           if (row.verifyStatus === "Pending" || row.verifyStatus === "Approved") return;
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Processing...";
           submitRowForVerification(row)
             .then((result) => {
               row.verifyStatus = result.status || "Pending";
               row.verifyRequestId = result.request_id || result.requestId || "";
               row.verifyNote = result.message || "Submitted to owner.";
               appendLog("OK", "Single row submit completed", { record_id: row.recordId, status: row.verifyStatus });
-              render();
-              saveToCache();
               showStatus(els.statusVerify, "Submitted");
+              // Persist the status update to the server cache sheet
+              return upsertRowToServer_(row);
+            })
+            .then(() => {
+              appendLog("OK", "Persisted status update to All_lecturer_record", { record_id: row.recordId });
             })
             .catch((err) => {
               row.verifyNote = err.message || "Submit failed.";
-              appendLog("ERROR", "Single row submit failed", { record_id: row.recordId, error: row.verifyNote });
-              render();
+              appendLog("ERROR", "Single row submit/persist failed", { record_id: row.recordId, error: err.message || String(err) });
               showStatus(els.statusVerify, "Error");
+            }).finally(() => {
+              render();
+              saveToCache();
             });
         }
         return;
@@ -1915,7 +1939,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
       document.getElementById(id).addEventListener("change", updatePreview);
     });
     els.subject.addEventListener("change", () => {
-      applyOwnerBySubject_(true);
+      applyOwnerBySubject_();
       updatePreview();
     });
 
