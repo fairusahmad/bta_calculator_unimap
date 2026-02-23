@@ -137,15 +137,27 @@ function doGet(e) {
   }
 
   if (action === "statuses") {
-    return jsonOrJsonp_(handleStatuses_(p), p.callback);
+    try {
+      return jsonOrJsonp_(handleStatuses_(p), p.callback);
+    } catch (err) {
+      return jsonOrJsonp_({ ok: false, message: err.message }, p.callback);
+    }
   }
 
   if (action === "rows") {
-    return jsonOrJsonp_(handleLecturerRows_(p), p.callback);
+    try {
+      return jsonOrJsonp_(handleLecturerRows_(p), p.callback);
+    } catch (err) {
+      return jsonOrJsonp_({ ok: false, message: err.message }, p.callback);
+    }
   }
 
   if (action === "subjects") {
-    return jsonOrJsonp_(handleSubjects_(), p.callback);
+    try {
+      return jsonOrJsonp_(handleSubjects_(), p.callback);
+    } catch (err) {
+      return jsonOrJsonp_({ ok: false, message: err.message }, p.callback);
+    }
   }
 
   if (action === "upsert_subject") {
@@ -365,13 +377,66 @@ function handleLecturerRows_(params) {
   if (values.length < 2) return { ok: true, items: [] };
 
   const idx = headersIndex_(values[0]);
-  const out = [];
+  
+  // --- SYNC PENDING STATUSES START ---
+  const userRowsIndices = [];
+  const pendingRequestIds = new Set();
 
   for (let r = 1; r < values.length; r++) {
     const rowHelper = normalizeEmail_(values[r][idx.helper_lecturer_email]);
     if (rowHelper !== helperEmail) continue;
     const deleted = String(values[r][idx.is_deleted] || "").toLowerCase();
     if (deleted === "1" || deleted === "true" || deleted === "yes") continue;
+    
+    userRowsIndices.push(r);
+    
+    const vStatus = String(values[r][idx.verify_status] || "Draft");
+    const vReqId = String(values[r][idx.verify_request_id] || "");
+    
+    if (vStatus === "Pending" && vReqId) {
+      pendingRequestIds.add(vReqId);
+    }
+  }
+
+  const statusUpdates = {};
+  if (pendingRequestIds.size > 0) {
+    const reqSheet = getSheet_();
+    const reqValues = reqSheet.getDataRange().getValues();
+    if (reqValues.length > 1) {
+      const reqIdx = headersIndex_(reqValues[0]);
+      for (let i = 1; i < reqValues.length; i++) {
+        const rid = String(reqValues[i][reqIdx.request_id] || "");
+        if (pendingRequestIds.has(rid)) {
+          const s = String(reqValues[i][reqIdx.status] || "");
+          if (s === "Approved" || s === "Rejected") {
+            statusUpdates[rid] = {
+              status: s,
+              comment: String(reqValues[i][reqIdx.approver_comment] || "")
+            };
+          }
+        }
+      }
+    }
+  }
+  // --- SYNC PENDING STATUSES END ---
+
+  const out = [];
+  const updates = [];
+
+  for (const r of userRowsIndices) {
+    let vStatus = String(values[r][idx.verify_status] || "Draft");
+    const vReqId = String(values[r][idx.verify_request_id] || "");
+    let vNote = String(values[r][idx.verify_note] || "");
+
+    if (vReqId && statusUpdates[vReqId]) {
+      vStatus = statusUpdates[vReqId].status;
+      vNote = statusUpdates[vReqId].comment;
+      updates.push({
+        row: r + 1,
+        status: vStatus,
+        note: vNote
+      });
+    }
 
     out.push({
       recordId: String(values[r][idx.record_id] || ""),
@@ -386,15 +451,24 @@ function handleLecturerRows_(params) {
       dateDisplay: String(values[r][idx.date_display] || ""),
       week: Number(values[r][idx.week] || 1),
       pelajar: Number(values[r][idx.pelajar] || 0),
-      helperEmail: rowHelper,
+      helperEmail: normalizeEmail_(values[r][idx.helper_lecturer_email]),
       ownerMode: String(values[r][idx.owner_mode] || "l2"),
       ownerEmail: normalizeEmail_(values[r][idx.owner_email]),
-      verifyStatus: String(values[r][idx.verify_status] || "Draft"),
-      verifyRequestId: String(values[r][idx.verify_request_id] || ""),
-      verifyNote: String(values[r][idx.verify_note] || ""),
+      verifyStatus: vStatus,
+      verifyRequestId: vReqId,
+      verifyNote: vNote,
       jamBebanCalc: Number(values[r][idx.jam_beban_calc] || 0),
       createdAt: String(values[r][idx.created_at] || malaysiaNowIso_()),
       minggu: 1
+    });
+  }
+
+  if (updates.length > 0) {
+    const now = malaysiaNowIso_();
+    updates.forEach(u => {
+      sh.getRange(u.row, idx.verify_status + 1).setValue(u.status);
+      sh.getRange(u.row, idx.verify_note + 1).setValue(u.note);
+      sh.getRange(u.row, idx.updated_at + 1).setValue(now);
     });
   }
 
@@ -572,7 +646,7 @@ function handleDecision_(input) {
 
   const ownerEmail = normalizeEmail_(sheet.getRange(rowNumber, ownerCol + 1).getValue());
   if (ownerEmail !== approverEmail) {
-    throw new Error("Only the subject owner (L2) can approve/reject this request.");
+    throw new Error(`Only the subject owner (L2) can approve/reject this request. Current user: ${approverEmail}`);
   }
 
   const currentStatus = String(sheet.getRange(rowNumber, statusCol + 1).getValue() || "");
@@ -590,24 +664,35 @@ function handleDecision_(input) {
 }
 
 function sendApprovalEmail_(row) {
-  const appUrl = ScriptApp.getService().getUrl();
-  const qs = `record_id=${encodeURIComponent(row.record_id)}&token=${encodeURIComponent(row.approval_token)}`;
+  let appUrl = ScriptApp.getService().getUrl();
+  // Force domain-specific URL to ensure UniMAP account login
+  if (appUrl.includes("/macros/s/") && !appUrl.includes("unimap.edu.my")) {
+    appUrl = appUrl.replace("/macros/s/", "/a/macros/unimap.edu.my/s/");
+  }
+
+  const qs = `record_id=${encodeURIComponent(row.record_id)}&token=${encodeURIComponent(row.approval_token)}&authuser=${encodeURIComponent(row.owner_lecturer_email)}`;
   const approveLink = `${appUrl}?action=decision&decision=Approved&${qs}`;
   const rejectLink = `${appUrl}?action=decision&decision=Rejected&${qs}`;
 
+  const ownerName = resolveDisplayName_(row.owner_lecturer_email);
+  const helperName = resolveDisplayName_(row.helper_lecturer_email);
+
   const subject = `[UniMAP] Verification required: ${row.subject_code}`;
   const body = [
-    `Dear subject owner (${row.owner_lecturer_email}),`,
+    `Dear ${ownerName},`,
     "",
-    `A teaching assistance entry was submitted by ${row.helper_lecturer_email}.`,
+    `A teaching assistance entry was submitted by ${helperName} (${row.helper_lecturer_email}).`,
     `Subject: ${row.subject_code}`,
     `Type: ${row.jenis}`,
     `Schedule: ${row.schedule}`,
     "",
+    "Please verify the entry by clicking one of the links below:",
     `Approve: ${approveLink}`,
     `Reject: ${rejectLink}`,
     "",
-    "This email is generated by the UniMAP teaching load tool."
+    "Note: These verification links can only be used by you as the designated subject owner.",
+    "",
+    "This email is generated by the UniMAP teaching load tool.",
   ].join("\n");
 
   MailApp.sendEmail({
@@ -672,16 +757,12 @@ function normalizeMalaysiaIso_(value, fallbackIso) {
 
 function enforceUserExecution_(expectedEmail) {
   const activeEmail = normalizeEmail_(Session.getActiveUser().getEmail());
-  const effectiveEmail = normalizeEmail_(Session.getEffectiveUser().getEmail());
 
   if (!isUniMapEmail_(activeEmail)) {
     throw new Error("Submit requires signed-in UniMAP account.");
   }
   if (activeEmail !== expectedEmail) {
     throw new Error("Submit using the same UniMAP account as helper_lecturer_email.");
-  }
-  if (!effectiveEmail || activeEmail !== effectiveEmail) {
-    throw new Error("Deploy Web App with Execute as: User accessing the web app.");
   }
 }
 

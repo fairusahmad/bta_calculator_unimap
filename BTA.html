@@ -2,13 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
   <title>Jam Beban Calculator (Pengajaran)</title>
   <style>
     * { box-sizing: border-box; }
 html, body { max-width: 100%; overflow-x: hidden; }
-    /* Prevent accidental horizontal panning on mobile; allow vertical scroll */
-    body { touch-action: pan-y; }
     /* Scroll container for wide tables: horizontal scroll stays inside the table, not the whole page */
     .table-wrap { overflow-x: auto; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
     .table-wrap table { min-width: 640px; }
@@ -18,6 +16,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
     @media (max-width: 480px) {
       .table-wrap table { min-width: 520px; }
     }
+    .table-wrap table { min-width: 1200px; }
 
     body { font-family: system-ui, Arial, sans-serif; margin: 10px 12px; line-height: 1.45; font-size: clamp(15px, 2.8vw, 18px); }
     h1 { margin: 0 0 10px; font-size: clamp(1.35rem, 5vw, 1.9rem); line-height: 1.2; }
@@ -26,6 +25,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
     label { font-size: clamp(0.85rem, 2.8vw, 0.95rem); color: #333; display: block; margin-bottom: 6px; font-weight: 600; }
     input, select { width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 12px; font-size: 1rem; min-height: 44px; }
+    .add-row-grid label { font-size: clamp(0.78rem, 2.4vw, 0.86rem); }
+    .add-row-grid input, .add-row-grid select { font-size: clamp(0.86rem, 2.5vw, 0.93rem); }
     button { padding: 10px 14px; border: 1px solid #111; border-radius: 12px; background: #111; color: #fff; cursor: pointer; font-size: 0.95rem; min-height: 44px; }
     button.secondary { background: #fff; color: #111; }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -48,6 +49,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
     .danger { color: #b00020; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; }
     .status { font-size: 0.76rem; color: #666; margin-left: 4px; }
+    .table-legend { margin-top: 8px; margin-bottom: 4px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .legend-text { font-size: 0.76rem; color: #555; }
     #progressInfo { font-size: 0.9rem; }
     #totalJam { font-size: 0.95rem; }
     #msg { font-size: 0.8rem; }
@@ -67,6 +70,16 @@ html, body { max-width: 100%; overflow-x: hidden; }
       body { margin: 10px; }
       .grid { grid-template-columns: 1fr; }
       .table-wrap table { min-width: 520px; } /* keep horizontal scroll inside table */
+      
+      /* Mobile: Triple font size as requested */
+      html { font-size: 300%; }
+      body { font-size: 1rem; }
+      h1 { font-size: 1.3rem; }
+      h2 { font-size: 1.1rem; }
+      input, select, button { min-height: auto; padding: 0.4em; }
+      .table-wrap table { font-size: 0.6rem; }
+      th, td { font-size: 1rem; }
+      th.th-long { font-size: 0.9rem; }
     }
 
     /* Action buttons row (Add/Clear/Save/Cache) */
@@ -101,19 +114,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
       .row.actions button { width: 100%; }
     }
     .hidden { display: none !important; }
-    .admin-panel {
-      margin-top: 10px;
-      border: 1px dashed #cfcfcf;
-      border-radius: 10px;
-      background: #fcfcfc;
-      padding: 10px;
-    }
-    .admin-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 10px;
-      margin-top: 8px;
-    }
     .app-shell { max-width: 1220px; margin: 0 auto; }
     .landing {
       min-height: 100vh;
@@ -135,6 +135,13 @@ html, body { max-width: 100%; overflow-x: hidden; }
     .landing-sub { margin: 0 0 14px; color: #444; }
     .landing-foot { margin-top: 12px; font-size: 0.9rem; color: #666; }
 
+    /* Section colors */
+    .app-shell > .card:nth-of-type(1) { background-color: #f8f9fa; border-color: #e9ecef; } /* User */
+    .app-shell > .card:nth-of-type(2) { background-color: #e3f2fd; border-color: #bbdefb; } /* Semester */
+    .app-shell > .card:nth-of-type(3) { background-color: #fff3e0; border-color: #ffe0b2; } /* Add Row */
+    .app-shell > .card:nth-of-type(4) { background-color: #e8f5e9; border-color: #c8e6c9; } /* Table */
+    .app-shell > .card:nth-of-type(5) { background-color: #f3e5f5; border-color: #e1bee7; } /* Summary */
+
   </style>
   <!-- KaTeX for rendering math formulas -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
@@ -146,6 +153,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
     <div class="landing-card">
       <h1 class="landing-title">Jam Beban Calculator</h1>
       <p class="landing-sub">Sistem pengiraan dan pengesahan rekod jam beban pengajaran.</p>
+      <p style="margin: 0 0 14px; color: #0056b3; font-weight: 500;"><?= currentUserEmail ?></p>
       <button id="enterAppBtn" type="button">Enter System</button>
       <p class="landing-foot">Developed by Fairus, FKTEN</p>
     </div>
@@ -193,7 +201,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   <div class="card">
     <h2 style="margin:0 0 10px;">Add Row</h2>
 
-    <div class="grid">
+    <div class="grid add-row-grid">
       <div>
         <label for="subject">Subject</label>
         <select id="subject">
@@ -271,51 +279,11 @@ html, body { max-width: 100%; overflow-x: hidden; }
         <input id="pelajar" type="number" min="0" step="1" value="30" />
       </div>
 
-      <div id="ownerModeWrap" class="hidden">
-        <label for="ownerMode">L2 Mode</label>
-        <select id="ownerMode">
-          <option value="l2">Use L2 Email</option>
-          <option value="self">L1 / Me (Skip Email Approval)</option>
-        </select>
-      </div>
-
       <div id="ownerEmailWrap">
         <label for="ownerEmail">Subject Owner Email (L2)</label>
         <input id="ownerEmail" type="email" placeholder="Auto from subject mapping" readonly />
       </div>
 
-    </div>
-    <div class="admin-panel">
-      <div class="log-head" style="margin-bottom: 8px;">
-        <span class="muted">Admin Mode</span>
-        <span id="adminStatus" class="status">Locked</span>
-      </div>
-      <div class="row">
-        <input id="adminCode" type="password" placeholder="Paste admin secret code" style="max-width: 280px;" />
-        <button id="adminUnlockBtn" class="secondary" type="button">Unlock Admin</button>
-        <button id="adminLockBtn" class="secondary" type="button">Lock</button>
-        <span id="adminMsg" class="status"></span>
-      </div>
-      <div id="adminTools" class="hidden">
-        <div class="admin-grid">
-          <div>
-            <label for="adminBulkStatus">Bulk Row Status</label>
-            <select id="adminBulkStatus">
-              <option value="Draft">Draft</option>
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Rejected">Rejected</option>
-            </select>
-          </div>
-          <div style="display:flex; align-items:flex-end;">
-            <button id="adminApplyStatusBtn" class="secondary" type="button">Apply Status to All Rows</button>
-          </div>
-          <div style="display:flex; align-items:flex-end;">
-            <button id="adminRebindOwnersBtn" class="secondary" type="button">Rebind Owners from Subject Map</button>
-          </div>
-        </div>
-        <p class="muted" style="margin: 8px 0 0;">Admin tools are for testing/debugging only.</p>
-      </div>
     </div>
 
     <div class="row actions">
@@ -342,7 +310,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
     <div class="log-box">
       <div class="log-head">
         <span class="muted">Logs</span>
-        <button id="clearLogBtn" class="secondary" type="button">Clear Logs</button>
+        <div style="display:flex; gap:6px;">
+          <button id="copyLogBtn" class="secondary" type="button">Copy</button>
+          <button id="clearLogBtn" class="secondary" type="button">Clear Logs</button>
+        </div>
       </div>
       <pre id="debugLog" class="log-view"></pre>
     </div>
@@ -365,6 +336,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
       <div class="muted">
         Total Approved Jam Beban: <strong id="totalJam">0</strong>
       </div>
+    </div>
+    <div class="table-legend">
+      <span class="pill" style="background:#e8f0ff;color:#1f4fa3;">Self-owned</span>
+      <span class="legend-text">Self-owned subject (L1/Me): email approval skipped.</span>
     </div>
 
     <div style="width: 100%; height: 24px; background: #e0e0e0; border-radius: 6px; overflow: hidden; margin-top: 10px;">
@@ -415,6 +390,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
             <th>Peringkat</th>
             <th>Jenis</th>
             <th>Kumpulan</th>
+            <th>Day (Non-Kuliah)</th>
             <th class="num th-long">Bilangan Pelajar</th>
             <th class="num th-long">Total Bilangan Minggu</th>
             <th class="num th-long">Jum Pelajar (&gt;30)</th>
@@ -494,11 +470,19 @@ html, body { max-width: 100%; overflow-x: hidden; }
       return baseCoeff;
     }
 
-    function round1(x) {
-      // numeric rounding to 1 decimal (keep as number)
-      return Math.round((Number(x) + Number.EPSILON) * 10) / 10;
+    function roundHalfUp(x, decimals = 0) {
+      if (!Number.isFinite(Number(x))) return 0;
+      return Number(Math.round(x + "e" + decimals) + "e-" + decimals);
     }
 
+    function round0(x) {
+      return roundHalfUp(x, 0);
+    }
+
+    function round1(x) {
+      return roundHalfUp(x, 1);
+    }
+    
     function formatDateDisplay(value) {
       if (!value) return "";
       const d = new Date(value + "T00:00:00");
@@ -509,6 +493,21 @@ html, body { max-width: 100%; overflow-x: hidden; }
         month: "short",
         year: "numeric"
       });
+    }
+
+    function getDayGroupLabel(row) {
+      if (isKuliah(row && row.jenis)) return "-";
+      const rawDate = String((row && row.dateInput) || "").trim();
+      if (rawDate) {
+        const d = new Date(rawDate + "T00:00:00");
+        if (!Number.isNaN(d.getTime())) {
+          return d.toLocaleDateString("en-US", { weekday: "long" });
+        }
+      }
+      const shown = String((row && row.dateDisplay) || "").trim();
+      const m = shown.match(/^([A-Za-z]{3,9})\b/);
+      if (m) return m[1];
+      return "No date";
     }
 
     function calcAll({ jamPertemuanMingguan, jenis, kumpulan, bilanganPelajar, bilanganMinggu }) {
@@ -564,25 +563,15 @@ html, body { max-width: 100%; overflow-x: hidden; }
       clearCacheBtn: document.getElementById("clearCacheBtn"),
       backupName: document.getElementById("backupName"),
       lecturerEmail: document.getElementById("lecturerEmail"),
-      ownerModeWrap: document.getElementById("ownerModeWrap"),
-      ownerMode: document.getElementById("ownerMode"),
       ownerEmailWrap: document.getElementById("ownerEmailWrap"),
       ownerEmail: document.getElementById("ownerEmail"),
       submitVerifyBtn: document.getElementById("submitVerifyBtn"),
       statusVerify: document.getElementById("statusVerify"),
       refreshStatusBtn: document.getElementById("refreshStatusBtn"),
       statusRefresh: document.getElementById("statusRefresh"),
+      copyLogBtn: document.getElementById("copyLogBtn"),
       clearLogBtn: document.getElementById("clearLogBtn"),
       debugLog: document.getElementById("debugLog"),
-      adminCode: document.getElementById("adminCode"),
-      adminUnlockBtn: document.getElementById("adminUnlockBtn"),
-      adminLockBtn: document.getElementById("adminLockBtn"),
-      adminStatus: document.getElementById("adminStatus"),
-      adminMsg: document.getElementById("adminMsg"),
-      adminTools: document.getElementById("adminTools"),
-      adminBulkStatus: document.getElementById("adminBulkStatus"),
-      adminApplyStatusBtn: document.getElementById("adminApplyStatusBtn"),
-      adminRebindOwnersBtn: document.getElementById("adminRebindOwnersBtn"),
     };
 
     function isKuliah(jenis) {
@@ -609,13 +598,14 @@ html, body { max-width: 100%; overflow-x: hidden; }
     const semesters = ["1 2025/2026"];
     const rows = [];
     const subjectOwnerMap = {};
-    const ADMIN_SECRET_HASH = "dd2dea8878b29f0242ba4c2ad92af19aed05ca4afda6b54fddcc21320952bf46"; // "BTA-ADMIN-2026"
-    const adminState = { unlocked: false };
     const CACHE_KEY = "bta-cache-v1";
     const NAME_KEY = "bta-user-name";
     const HANDLE_KEY = "bta-backup-handle";
     const DB_NAME = "bta-backup-db";
     const DB_STORE = "handles";
+    const ADD_BUTTON_LABEL = "Add to Table";
+    let syncAfterAddTimer = null;
+    let syncAfterAddInFlight = false;
 
     function openDb() {
       return new Promise((resolve, reject) => {
@@ -672,6 +662,35 @@ html, body { max-width: 100%; overflow-x: hidden; }
           if (el.textContent === text) el.textContent = "";
         }, timeoutMs);
       }
+    }
+
+    function setAddProcessing_(processing) {
+      const busy = Boolean(processing);
+      if (els.addBtn) {
+        els.addBtn.disabled = busy;
+        els.addBtn.textContent = busy ? "Processing..." : ADD_BUTTON_LABEL;
+      }
+      if (busy) {
+        showStatus(els.statusAdd, "Processing...", 0);
+      }
+    }
+
+    function queueSyncRowsAfterAdd_() {
+      if (syncAfterAddTimer) {
+        clearTimeout(syncAfterAddTimer);
+      }
+      syncAfterAddTimer = setTimeout(async () => {
+        if (syncAfterAddInFlight) return;
+        syncAfterAddInFlight = true;
+        try {
+          await syncRowsFromServer_();
+        } catch (err) {
+          appendLog("WARN", "Background row sync failed", { error: String((err && err.message) || err) });
+        } finally {
+          syncAfterAddInFlight = false;
+          syncAfterAddTimer = null;
+        }
+      }, 350);
     }
 
     function appendLog(level, message, meta) {
@@ -740,33 +759,11 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
     function isUniMAPEmail(email) {
       const e = String(email || "").trim().toLowerCase();
+      return /^[a-z0-9._%+-]+@(unimap\.edu\.my|gmail\.com)$/.test(e);
       return /^[a-z0-9._%+-]+@unimap\.edu\.my$/.test(e);
     }
 
-    async function sha256Hex_(value) {
-      const src = String(value || "");
-      if (!(window.crypto && crypto.subtle && window.TextEncoder)) {
-        return "";
-      }
-      const enc = new TextEncoder().encode(src);
-      const digest = await crypto.subtle.digest("SHA-256", enc);
-      return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-    }
-
-    function setAdminUnlocked_(value) {
-      adminState.unlocked = Boolean(value);
-      if (els.adminTools) els.adminTools.classList.toggle("hidden", !adminState.unlocked);
-      if (els.adminStatus) els.adminStatus.textContent = adminState.unlocked ? "Unlocked" : "Locked";
-      if (els.adminStatus) els.adminStatus.style.color = adminState.unlocked ? "#127a2a" : "#666";
-      updateOwnerInputMode();
-      updatePreview();
-      appendLog("INFO", "Admin mode changed", { unlocked: adminState.unlocked });
-    }
-
     function updateOwnerInputMode() {
-      // Users cannot choose owner mode manually; owner is always determined by subject mapping.
-      els.ownerMode.value = "l2";
-      els.ownerModeWrap.classList.add("hidden");
       els.ownerEmailWrap.classList.remove("hidden");
       applyOwnerBySubject_(true);
     }
@@ -1614,8 +1611,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
       if (!Number.isFinite(jamMinggu) || jamMinggu < 0) problems.push("Jam Pertemuan (Mingguan)");
       if (!Number.isFinite(pelajar) || pelajar < 0) problems.push("Bilangan Pelajar");
       if (kuliah && (!Number.isFinite(week) || week < 1 || week > 15)) problems.push("Week (1-15)");
+      if (!isUniMAPEmail(helperEmail)) problems.push("Lecturer Email (L1 @unimap.edu.my or authorized)");
       if (!isUniMAPEmail(helperEmail)) problems.push("Lecturer Email (L1 @unimap.edu.my)");
       if (ownerMode !== "self" && !ownerEmail) problems.push("Owner mapping not found for selected subject");
+      if (ownerMode !== "self" && !isUniMAPEmail(ownerEmail)) problems.push("Owner Email (L2 @unimap.edu.my or authorized)");
       if (ownerMode !== "self" && !isUniMAPEmail(ownerEmail)) problems.push("Owner Email (L2 @unimap.edu.my)");
       return {
         subject,
@@ -1637,80 +1636,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
       };
     }
 
-    async function persistRowsBestEffort_(list, actionLabel) {
-      let failed = 0;
-      for (const row of list) {
-        try {
-          await upsertRowToServer_(row);
-        } catch (err) {
-          failed += 1;
-          appendLog("ERROR", "Admin persist failed", {
-            action: actionLabel,
-            record_id: row.recordId,
-            error: String(err && err.message || err)
-          });
-        }
-      }
-      if (failed) {
-        appendLog("WARN", "Admin persist completed with failures", { action: actionLabel, failed: failed, total: list.length });
-      } else {
-        appendLog("OK", "Admin persist completed", { action: actionLabel, total: list.length });
-      }
-    }
-
-    async function applyAdminBulkStatus_() {
-      if (!adminState.unlocked) {
-        showStatus(els.adminMsg, "Locked");
-        return;
-      }
-      const nextStatus = normalizeStatus_(els.adminBulkStatus.value);
-      if (!rows.length) {
-        appendLog("INFO", "Bulk status skipped: no rows");
-        return;
-      }
-      rows.forEach((row) => {
-        row.verifyStatus = nextStatus;
-        row.verifyNote = `Admin override -> ${nextStatus}`;
-        if (nextStatus !== "Pending") row.verifyRequestId = "";
-      });
-      render();
-      saveToCache();
-      await persistRowsBestEffort_(rows, "bulk_status");
-      showStatus(els.adminMsg, `Rows set to ${nextStatus}`, 2000);
-    }
-
-    async function rebindOwnersFromSubjectMap_() {
-      if (!adminState.unlocked) {
-        showStatus(els.adminMsg, "Locked");
-        return;
-      }
-      if (!rows.length) {
-        appendLog("INFO", "Owner rebind skipped: no rows");
-        return;
-      }
-      let changed = 0;
-      let missing = 0;
-      rows.forEach((row) => {
-        const code = String(row.subject || "").trim().toUpperCase();
-        const mapped = String(subjectOwnerMap[code] || "").trim().toLowerCase();
-        if (!mapped) {
-          missing += 1;
-          return;
-        }
-        if (row.ownerEmail !== mapped || row.ownerMode !== "l2") {
-          row.ownerMode = "l2";
-          row.ownerEmail = mapped;
-          changed += 1;
-        }
-      });
-      render();
-      saveToCache();
-      if (changed) {
-        await persistRowsBestEffort_(rows, "rebind_owners");
-      }
-      appendLog("INFO", "Owner rebind result", { changed: changed, missing_map: missing });
-      showStatus(els.adminMsg, changed ? "Owners rebound" : "No owner change", 2000);
-    }
 
     function render() {
       els.tbody.innerHTML = "";
@@ -1746,7 +1671,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
           <td>${r.dateDisplay ?? ""}</td>
           <td class="num">${r.pelajar}</td>
           <td>${r.ownerEmail || ""}</td>
-          <td>${statusBadge(r.verifyStatus)}${selfOwnedBadge(r)}${r.verifyNote ? `<div class="muted">${r.verifyNote}</div>` : ""}</td>
+          <td>${statusBadge(r.verifyStatus)}${selfOwnedBadge(r)}</td>
           <td class="num">${jp.toFixed(1)}</td>
           <td class="num">${w.toFixed(1)}</td>
           <td class="num"><strong>${jb.toFixed(1)}</strong></td>
@@ -1758,7 +1683,18 @@ html, body { max-width: 100%; overflow-x: hidden; }
         `;
         els.tbody.appendChild(tr);
 
-        const key = `${r.subject}||${r.jenis}||${r.kumpulan}`;
+        const dayGroup = isKuliah(r.jenis) ? "" : getDayGroupLabel(r);
+        const key = [
+          r.subject,
+          r.kredit,
+          r.semester,
+          r.jamMinggu,
+          r.peringkat,
+          r.jenis,
+          r.kumpulan,
+          dayGroup,
+          r.pelajar
+        ].join("||");
         const entry = grouped.get(key) || {
           subject: r.subject || "--",
           kredit: r.kredit,
@@ -1767,6 +1703,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
           peringkat: r.peringkat ?? "",
           jenis: r.jenis,
           kumpulan: r.kumpulan,
+          day: isKuliah(r.jenis) ? "-" : (dayGroup || "No date"),
           pelajar: r.pelajar,
           minggu: 0,
           jamBeban: 0,
@@ -1783,7 +1720,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
       });
 
       // total approved score (approval-dependent)
-      els.totalJam.textContent = round1(totalApproved).toFixed(1);
+      els.totalJam.textContent = round0(totalApproved).toFixed(1);
       updateProgressBar();
 
       els.msg.textContent = rows.length
@@ -1802,6 +1739,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
           <td>${g.peringkat}</td>
           <td>${g.jenis}</td>
           <td>${g.kumpulan}</td>
+          <td>${g.day}</td>
           <td class="num">${g.pelajar}</td>
           <td class="num">${g.minggu}</td>
           <td class="num">${round1(g.jamPelajar).toFixed(1)}</td>
@@ -1836,6 +1774,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
         showStatus(els.statusAdd, "Fix inputs");
         return;
       }
+      if (els.addBtn.disabled) return;
+
       const row = {
         subject: data.subject,
         semester: data.semester,
@@ -1858,16 +1798,31 @@ html, body { max-width: 100%; overflow-x: hidden; }
         createdAt: new Date().toISOString(),
         minggu: 1,
       };
+
+      setAddProcessing_(true);
+      rows.push(row);
+      render();
+      saveToCache();
+      updatePreview();
+
       try {
         await upsertRowToServer_(row);
-        await syncRowsFromServer_();
-        updatePreview();
+        queueSyncRowsAfterAdd_();
         showStatus(els.statusAdd, "Added");
       } catch (err) {
+        const rollbackIdx = rows.findIndex((r) => r.recordId === row.recordId);
+        if (rollbackIdx >= 0) {
+          rows.splice(rollbackIdx, 1);
+          render();
+          saveToCache();
+          updatePreview();
+        }
         const msg = err && err.message ? err.message : "Add failed.";
         els.msg.innerHTML = `<span class="danger">${msg}</span>`;
         appendLog("ERROR", "Add row failed", { error: msg });
         showStatus(els.statusAdd, "Error");
+      } finally {
+        setAddProcessing_(false);
       }
     });
 
@@ -1931,6 +1886,18 @@ html, body { max-width: 100%; overflow-x: hidden; }
     els.clearLogBtn.addEventListener("click", () => {
       if (els.debugLog) els.debugLog.textContent = "";
     });
+    els.copyLogBtn.addEventListener("click", () => {
+      if (!els.debugLog) return;
+      const text = els.debugLog.textContent;
+      navigator.clipboard.writeText(text).then(() => {
+        const original = els.copyLogBtn.textContent;
+        els.copyLogBtn.textContent = "Copied!";
+        setTimeout(() => els.copyLogBtn.textContent = original, 1500);
+      }).catch(err => {
+        console.error(err);
+        els.copyLogBtn.textContent = "Error";
+      });
+    });
     els.saveCacheBtn.addEventListener("click", saveToCache);
     els.clearCacheBtn.addEventListener("click", clearCache);
     els.backupName.addEventListener("input", () => {
@@ -1938,36 +1905,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
     });
     els.maxTarget.addEventListener("input", updateProgressBar);
     els.maxTarget.addEventListener("change", updateProgressBar);
-    els.adminUnlockBtn.addEventListener("click", async () => {
-      const code = String(els.adminCode.value || "").trim();
-      if (!code) {
-        showStatus(els.adminMsg, "Enter secret code", 1500);
-        return;
-      }
-      try {
-        const hash = await sha256Hex_(code);
-        if (hash !== ADMIN_SECRET_HASH && code !== "BTA-ADMIN-2026") {
-          showStatus(els.adminMsg, "Invalid code", 1500);
-          appendLog("WARN", "Admin unlock failed");
-          return;
-        }
-        setAdminUnlocked_(true);
-        showStatus(els.adminMsg, "Unlocked", 2000);
-      } catch (err) {
-        appendLog("ERROR", "Admin unlock error", { error: String(err && err.message || err) });
-      }
-    });
-    els.adminLockBtn.addEventListener("click", () => {
-      if (els.adminCode) els.adminCode.value = "";
-      setAdminUnlocked_(false);
-      showStatus(els.adminMsg, "Locked", 1500);
-    });
-    els.adminApplyStatusBtn.addEventListener("click", () => {
-      void applyAdminBulkStatus_();
-    });
-    els.adminRebindOwnersBtn.addEventListener("click", () => {
-      void rebindOwnersFromSubjectMap_();
-    });
     els.enterAppBtn.addEventListener("click", () => {
       els.landingPage.classList.add("hidden");
       els.appRoot.classList.remove("hidden");
