@@ -1612,12 +1612,10 @@ html, body { max-width: 100%; overflow-x: hidden; }
       const dateDisplay = kuliah ? `Week ${week}` : formatDateDisplay(dateInput);
       const pelajar = Number(els.pelajar.value);
       const helperEmail = String(els.lecturerEmail.value || "").trim();
-      let ownerEmail;
-      if (els.ownerEmailSelect.classList.contains('hidden')) {
-        ownerEmail = String(els.ownerEmail.value || "").trim().toLowerCase();
-      } else {
-        ownerEmail = String(els.ownerEmailSelect.value || "").trim().toLowerCase();
-      }
+      const isSelfOwnedMode = els.ownerEmailSelect.classList.contains('hidden');
+      const ownerEmail = isSelfOwnedMode
+        ? String(els.ownerEmail.value || "").trim().toLowerCase()
+        : String(els.ownerEmailSelect.value || "").trim().toLowerCase();
 
       const ownerMode = ownerEmail && ownerEmail === String(helperEmail || "").trim().toLowerCase() ? "self" : "l2";
       const minggu = 1;
@@ -1628,10 +1626,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
       if (!Number.isFinite(jamMinggu) || jamMinggu < 0) problems.push("Jam Pertemuan (Mingguan)");
       if (!Number.isFinite(pelajar) || pelajar < 0) problems.push("Bilangan Pelajar");
       if (kuliah && (!Number.isFinite(week) || week < 1 || week > 15)) problems.push("Week (1-15)");
-      if (!isUniMAPEmail(helperEmail)) problems.push("Lecturer Email (L1 @unimap.edu.my or authorized)");
       if (!isUniMAPEmail(helperEmail)) problems.push("Lecturer Email (L1 @unimap.edu.my)");
       if (ownerMode !== "self" && !ownerEmail) problems.push("Owner mapping not found for selected subject");
-      if (ownerMode !== "self" && !isUniMAPEmail(ownerEmail)) problems.push("Owner Email (L2 @unimap.edu.my or authorized)");
       if (ownerMode !== "self" && !isUniMAPEmail(ownerEmail)) problems.push("Owner Email (L2 @unimap.edu.my)");
       return {
         subject,
