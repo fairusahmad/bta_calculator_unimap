@@ -3,6 +3,7 @@ const SPREADSHEET_ID = "1zxmp-FT6qLgLhTyWD7e0KczOOVrDFHIKudCkfMUhe0E";
 const MALAYSIA_TZ = "Asia/Kuala_Lumpur";
 const ALL_LECTURER_SHEET_NAME = "All_lecturer_record";
 const SUBJECTS_SHEET_NAME = "Subjects";
+const EMAIL_BANK_SHEET_NAME = "EmailBank";
 const DEFAULT_SUBJECT_OWNER_EMAIL = "fairusahmad@unimap.edu.my";
 
 const HEADERS = [
@@ -63,6 +64,12 @@ const SUBJECTS_HEADERS = [
   "is_active"
 ];
 
+const EMAIL_BANK_HEADERS = [
+  "email",
+  "name",
+  "updated_at"
+];
+
 const DEFAULT_SUBJECTS = [
   "DSC101",
   "DSC102",
@@ -102,6 +109,9 @@ function doPost(e) {
     if (action === "upsert_subject") {
       return jsonOut(handleUpsertSubject_(payload.subject_code || "", payload.owner_email || ""));
     }
+    if (action === "delete_subject") {
+      return jsonOut(handleDeleteSubject_(payload.subject_code || ""));
+    }
     if (action === "decision") {
       return jsonOut(handleDecision_({
         record_id: payload.record_id,
@@ -123,9 +133,29 @@ function doOptions(e) {
   return ContentService.createTextOutput();
 }
 
+function setupSheets_() {
+  getSheet_();
+  getAllLecturerSheet_();
+  getSubjectsSheet_();
+  getEmailBankSheet_();
+}
+
 function doGet(e) {
+  setupSheets_(); // Ensure all sheets are created on load
+
   const p = (e && e.parameter) || {};
   const action = String(p.action || "").toLowerCase();
+  const view = String(p.view || "").toLowerCase();
+
+  if (view === 'admin') {
+    // Serve the new admin page for subject management
+    enforceUniMapUser_(); // Protect the admin page
+    const t = HtmlService.createTemplateFromFile("Admin");
+    const subjectsData = handleSubjects_();
+    t.subjects = subjectsData.items || [];
+    return t.evaluate().setTitle("Subject Management");
+  }
+
 
   if (action === "submit") {
     try {
@@ -160,9 +190,25 @@ function doGet(e) {
     }
   }
 
+  if (action === "search_users") {
+    try {
+      return jsonOrJsonp_(handleSearchUsers_(p.query), p.callback);
+    } catch (err) {
+      return jsonOrJsonp_({ ok: false, message: err.message }, p.callback);
+    }
+  }
+
   if (action === "upsert_subject") {
     try {
       return jsonOrJsonp_(handleUpsertSubject_(p.subject_code, p.owner_email), p.callback);
+    } catch (err) {
+      return jsonOrJsonp_({ ok: false, message: err.message }, p.callback);
+    }
+  }
+
+  if (action === "delete_subject") {
+    try {
+      return jsonOrJsonp_(handleDeleteSubject_(p.subject_code), p.callback);
     } catch (err) {
       return jsonOrJsonp_({ ok: false, message: err.message }, p.callback);
     }
@@ -263,6 +309,56 @@ function apiUpsertSubject(subjectCode, ownerEmail) {
   } catch (err) {
     return { ok: false, message: err.message };
   }
+}
+
+function apiDeleteSubject(subjectCode) {
+  try {
+    return handleDeleteSubject_(subjectCode);
+  } catch (err) {
+    return { ok: false, message: err.message };
+  }
+}
+
+function apiSearchUsers(query) {
+  try {
+    return handleSearchUsers_(query);
+  } catch (err) {
+    return { ok: false, message: err.message, items: [] };
+  }
+}
+
+function handleSearchUsers_(query) {
+  const q = String(query || "").trim();
+  if (q.length < 3) {
+    // Avoid searching for very short strings to reduce API calls and improve performance.
+    return { ok: true, items: [] };
+  }
+  const lowerQuery = q.toLowerCase();
+
+  const items = [];
+  try {
+    const sh = getEmailBankSheet_();
+    const values = sh.getDataRange().getValues();
+    if (values.length < 2) {
+      return { ok: true, items: [] };
+    }
+
+    const idx = headersIndex_(values[0]);
+
+    for (let r = 1; r < values.length; r++) {
+      const email = String(values[r][idx.email] || "").trim();
+      const name = String(values[r][idx.name] || "").trim();
+      if (!email || !name) continue;
+
+      if (email.toLowerCase().includes(lowerQuery) || name.toLowerCase().includes(lowerQuery)) {
+        items.push({ name: name, email: email });
+      }
+      if (items.length >= 10) break; // Limit results for performance
+    }
+  } catch (err) {
+    return { ok: false, message: "User search failed. Ensure Admin SDK API is enabled. Error: " + err.message, items: [] };
+  }
+  return { ok: true, items: items };
 }
 
 function handleStatuses_(params) {
@@ -375,6 +471,30 @@ function handleUpsertSubject_(subjectCodeRaw, ownerEmailRaw) {
   }
 
   return { ok: true, subject_code: subjectCode, owner_email: ownerEmailString };
+}
+
+function handleDeleteSubject_(subjectCodeRaw) {
+  const subjectCode = String(subjectCodeRaw || "").trim().toUpperCase();
+  if (!subjectCode) throw new Error("Missing subject_code.");
+
+  enforceUniMapUser_();
+
+  const sh = getSubjectsSheet_();
+  const values = sh.getDataRange().getValues();
+  if (values.length < 2) return { ok: true, message: "Subject not found in an empty sheet." };
+
+  const idx = headersIndex_(values[0]);
+
+  for (let r = 1; r < values.length; r++) {
+    if (String(values[r][idx.subject_code] || "").trim().toUpperCase() === subjectCode) {
+      const rowNo = r + 1;
+      sh.getRange(rowNo, idx.is_active + 1).setValue("0"); // Set is_active to 0
+      sh.getRange(rowNo, idx.updated_at + 1).setValue(malaysiaNowIso_());
+      return { ok: true, subject_code: subjectCode, message: "Subject marked as inactive." };
+    }
+  }
+
+  return { ok: false, message: "Subject not found." };
 }
 
 function parseRecordParam_(raw) {
@@ -756,6 +876,28 @@ function getSubjectsSheet_() {
     if (rows.length) {
       sh.getRange(2, 1, rows.length, SUBJECTS_HEADERS.length).setValues(rows);
     }
+  }
+  return sh;
+}
+
+function getEmailBankSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  ss.setSpreadsheetTimeZone(MALAYSIA_TZ);
+  let sh = ss.getSheetByName(EMAIL_BANK_SHEET_NAME);
+  if (!sh) sh = ss.insertSheet(EMAIL_BANK_SHEET_NAME);
+  if (sh.getLastRow() === 0) {
+    sh.appendRow(EMAIL_BANK_HEADERS);
+    // Add a sample row to guide the user
+    sh.appendRow([
+      "example.lecturer@unimap.edu.my",
+      "Example Lecturer Name",
+      malaysiaNowIso_()
+    ]);
+    sh.appendRow([
+      "another.lecturer@unimap.edu.my",
+      "Another Name",
+      malaysiaNowIso_()
+    ]);
   }
   return sh;
 }

@@ -1,0 +1,345 @@
+<!doctype html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subject Management</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 20px; background-color: #f9f9f9; color: #333; }
+    .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    h1, h2 { color: #111; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+    label { display: block; margin-bottom: 5px; font-weight: 600; }
+    input[type="text"], input[type="email"] { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; }
+    button:hover { background-color: #0056b3; }
+    button:disabled { background-color: #ccc; }
+    button.danger { background-color: #dc3545; } button.danger:hover { background-color: #c82333; }
+    #status { margin-top: 10px; font-style: italic; color: #555; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
+    
+    /* Styles for the scrollable subject list */
+    .table-container { max-height: 40vh; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; }
+    #subjectsTable th { position: sticky; top: 0; z-index: 1; } /* Keep headers visible on scroll */
+    #subjectsTable th, #subjectsTable td { font-size: 0.9rem; padding: 6px 8px; }
+    #subjectsTable button { padding: 4px 8px; font-size: 0.8rem; }
+
+    /* Styles for the owner autocomplete input */
+    .owner-input-container { position: relative; }
+    .owner-pills { display: flex; flex-wrap: wrap; gap: 5px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px; cursor: text; }
+    .owner-pill { display: flex; align-items: center; background-color: #e0e0e0; border-radius: 12px; padding: 3px 8px; font-size: 0.9rem; }
+    .owner-pill .pill-content { flex-grow: 1; line-height: 1.3; }
+    .owner-pill .pill-name { font-weight: 500; }
+    .owner-pill .pill-email { font-size: 0.8rem; color: #555; }
+    .owner-pill .pill-remove { margin-left: 8px; cursor: pointer; font-weight: bold; color: #555; }
+    .owner-pill .pill-remove:hover { color: #000; }
+    #ownerSearchInput { border: none; outline: none; flex-grow: 1; padding: 5px; font-size: 1rem; min-width: 150px; }
+    .autocomplete-results { position: absolute; background: white; border: 1px solid #ccc; border-top: none; width: 100%; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .autocomplete-item { padding: 10px; cursor: pointer; }
+    .autocomplete-item:hover { background-color: #f0f0f0; }
+    .autocomplete-item .name { font-weight: bold; }
+    .autocomplete-item .email { font-size: 0.85rem; color: #666; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Subject & Owner Management</h1>
+
+    <h2>Add / Update Subject Owner</h2>
+    <form id="subjectForm">
+      <div>
+        <label for="subjectCode">Subject Code</label>
+        <input type="text" id="subjectCode" name="subjectCode" placeholder="e.g., DSC101" required>
+      </div>
+      <div>
+        <label for="ownerSearchInput">Owner(s)</label>
+        <div class="owner-input-container">
+          <div id="ownerPillsContainer" class="owner-pills">
+            <input type="text" id="ownerSearchInput" placeholder="Type name or email to search...">
+          </div>
+          <div id="autocompleteResults" class="autocomplete-results hidden"></div>
+        </div>
+        <input type="hidden" id="ownerEmail" name="ownerEmail" required>
+      </div>
+      <button type="submit" id="submitBtn">Save Subject</button>
+    </form>
+    <div id="status"></div>
+
+    <h2>Registered Subjects</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <button id="refreshBtn" type="button">Refresh List</button>
+        <div id="listStatus" style="font-size: 0.9rem; color: #555;"></div>
+    </div>
+    <div class="table-container">
+      <table id="subjectsTable">
+        <thead>
+          <tr>
+            <th>Subject Code</th>
+            <th>Owner Email(s)</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <? if (subjects && subjects.length > 0) { ?>
+            <? for (var i = 0; i < subjects.length; i++) { ?>
+              <tr>
+                <td><?= subjects[i].subject_code ?></td>
+                <td><?= subjects[i].owner_emails.join('; ') ?></td>
+                <td>
+                  <button class="danger" data-subject-code="<?= subjects[i].subject_code ?>">Delete</button>
+                </td>
+              </tr>
+            <? } ?>
+          <? } else { ?>
+            <tr>
+              <td colspan="3">No subjects found.</td>
+            </tr>
+          <? } ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // --- State for the owner autocomplete ---
+    let owners = new Map(); // Use a Map to store email -> name mapping
+    let searchTimeout;
+
+    function setStatus(el, text, isError = false, timeoutMs = 3000) {
+        el.textContent = text;
+        el.style.color = isError ? '#dc3545' : '#555';
+        if (timeoutMs > 0) {
+            setTimeout(() => {
+                if (el.textContent === text) el.textContent = '';
+            }, timeoutMs);
+        }
+    }
+
+    function renderSubjects(subjects) {
+        const tbody = document.querySelector('#subjectsTable tbody');
+        tbody.innerHTML = ''; // Clear existing rows
+
+        if (subjects && subjects.length > 0) {
+            subjects.forEach(subject => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${subject.subject_code}</td>
+                    <td>${subject.owner_emails.join('; ')}</td>
+                    <td>
+                        <button class="danger" data-subject-code="${subject.subject_code}">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="3">No subjects found.</td></tr>';
+        }
+    }
+
+    function refreshSubjects() {
+        const listStatusEl = document.getElementById('listStatus');
+        setStatus(listStatusEl, 'Refreshing...', false, 0);
+
+        google.script.run
+            .withSuccessHandler(function(response) {
+                if (response.ok) {
+                    renderSubjects(response.items);
+                    setStatus(listStatusEl, 'List updated!', false, 2000);
+                } else {
+                    setStatus(listStatusEl, 'Error: ' + response.message, true);
+                }
+            })
+            .withFailureHandler(function(error) {
+                setStatus(listStatusEl, 'Error: ' + error.message, true);
+            })
+            .apiGetSubjects();
+    }
+
+    // --- Owner Autocomplete Functions ---
+
+    function renderOwnerPills() {
+        const pillsContainer = document.getElementById('ownerPillsContainer');
+        // Clear all but the input
+        pillsContainer.querySelectorAll('.owner-pill').forEach(pill => pill.remove());
+        
+        owners.forEach((name, email) => {
+            const pill = document.createElement('div');
+            pill.className = 'owner-pill';
+            pill.innerHTML = `
+                <div class="pill-content">
+                    <div class="pill-name">${name}</div>
+                    <div class="pill-email">${email}</div>
+                </div>
+                <span class="pill-remove" data-email="${email}">&times;</span>
+            `;
+            pillsContainer.insertBefore(pill, document.getElementById('ownerSearchInput'));
+        });
+
+        // Update the hidden input that gets submitted
+        document.getElementById('ownerEmail').value = Array.from(owners.keys()).join(';');
+    }
+
+    function addOwner(owner) {
+        const email = owner.email.trim().toLowerCase();
+        // If name is not provided (e.g. from direct input), use the email as the name
+        const name = owner.name || email;
+        owners.set(email, name);
+        renderOwnerPills();
+        document.getElementById('ownerSearchInput').value = '';
+        document.getElementById('autocompleteResults').classList.add('hidden');
+    }
+
+    function removeOwner(email) {
+        owners.delete(email.trim().toLowerCase());
+        renderOwnerPills();
+    }
+
+
+    document.getElementById('ownerPillsContainer').addEventListener('click', function(e) {
+        if (e.target.classList.contains('pill-remove')) {
+            removeOwner(e.target.dataset.email);
+        } else {
+            // Focus the input when clicking the container
+            document.getElementById('ownerSearchInput').focus();
+        }
+    });
+
+    document.getElementById('ownerSearchInput').addEventListener('input', function(e) {
+        clearTimeout(searchTimeout);
+        const query = e.target.value.trim();
+        const resultsContainer = document.getElementById('autocompleteResults');
+
+        if (query.length < 3) {
+            resultsContainer.classList.add('hidden');
+            return;
+        }
+
+        searchTimeout = setTimeout(() => {
+            google.script.run
+                .withSuccessHandler(function(response) {
+                    resultsContainer.innerHTML = '';
+                    if (response.ok && response.items.length > 0) {
+                        resultsContainer.classList.remove('hidden');
+                        response.items.forEach(item => {
+                            const div = document.createElement('div');
+                            div.className = 'autocomplete-item';
+                            div.innerHTML = `<div class="name">${item.name}</div><div class="email">${item.email}</div>`;
+                            div.onclick = () => addOwner(item);
+                            resultsContainer.appendChild(div);
+                        });
+                    } else {
+                        resultsContainer.classList.add('hidden');
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    console.error('Search failed:', error);
+                    resultsContainer.classList.add('hidden');
+                })
+                .apiSearchUsers(query);
+        }, 300); // Debounce requests
+    });
+
+    // Handle semicolon or Enter to add email directly
+    document.getElementById('ownerSearchInput').addEventListener('keydown', function(e) {
+        if (e.key === ';' || e.key === 'Enter') {
+            e.preventDefault();
+            const email = e.target.value.trim();
+            if (email) {
+                addOwner({ email: email, name: email }); // Add as a pill, using email for name
+            }
+        }
+    });
+
+    // Hide results when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!document.querySelector('.owner-input-container').contains(e.target)) {
+            document.getElementById('autocompleteResults').classList.add('hidden');
+        }
+    });
+
+    document.getElementById('subjectForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var submitBtn = document.getElementById('submitBtn');
+      var statusEl = document.getElementById('status');
+      
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving...';
+      setStatus(statusEl, 'Processing...', false, 0);
+
+      var subjectCode = document.getElementById('subjectCode').value.trim();
+      var ownerEmail = document.getElementById('ownerEmail').value;
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Save Subject';
+          if (response.ok) {
+            setStatus(statusEl, 'Successfully saved: ' + response.subject_code, false);
+            document.getElementById('subjectForm').reset();
+            owners.clear(); // Clear the pills
+            renderOwnerPills();
+            refreshSubjects(); // Live update the list
+          } else {
+            setStatus(statusEl, 'Error: ' + response.message, true);
+          }
+        })
+        .withFailureHandler(function(error) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Save Subject';
+          setStatus(statusEl, 'Error: ' + error.message, true);
+        })
+        .apiUpsertSubject(subjectCode, ownerEmail);
+    });
+
+    // Handle clicks on the table for "Edit" (populate form) and "Delete"
+    document.getElementById('subjectsTable').addEventListener('click', function(e) {
+        const target = e.target;
+
+        // Handle Delete button click
+        if (target.matches('button.danger[data-subject-code]')) {
+            const subjectCode = target.getAttribute('data-subject-code');
+            if (!confirm(`Are you sure you want to delete subject "${subjectCode}"? This will mark it as inactive.`)) {
+                return;
+            }
+
+            target.disabled = true;
+            target.textContent = 'Deleting...';
+
+            google.script.run
+                .withSuccessHandler(function(response) {
+                    if (response.ok) {
+                        refreshSubjects(); // Live update the list
+                    } else {
+                        alert('Error deleting subject: ' + response.message);
+                        target.disabled = false;
+                        target.textContent = 'Delete';
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    alert('Error deleting subject: ' + error.message);
+                    target.disabled = false;
+                    target.textContent = 'Delete';
+                })
+                .apiDeleteSubject(subjectCode);
+            return;
+        }
+
+        // Handle clicking on a row to populate the form for easy editing
+        const row = target.closest('tr');
+        if (!row || !row.cells[0] || !row.cells[1]) return;
+
+        owners.clear();
+        const emails = row.cells[1].textContent.trim().split(';').map(e => e.trim()).filter(Boolean);
+        emails.forEach(e => owners.set(e, e)); // When editing, we only have emails, so use email as name
+        renderOwnerPills();
+        document.getElementById('subjectCode').value = row.cells[0].textContent.trim();
+        document.getElementById('subjectCode').focus(); // Bring focus to the form
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', refreshSubjects);
+  </script>
+</body>
+</html>
