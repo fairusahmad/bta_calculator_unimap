@@ -51,7 +51,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
     .status { font-size: 0.76rem; color: #666; margin-left: 4px; }
     .table-legend { margin-top: 8px; margin-bottom: 4px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .legend-text { font-size: 0.76rem; color: #555; }
-    #progressInfo { font-size: 0.9rem; }
     #totalJam { font-size: 0.95rem; }
     #msg { font-size: 0.8rem; }
     div[style*="max-height"] { font-size: 0.85rem; }
@@ -326,9 +325,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
             <input id="maxTarget" type="number" min="0" step="0.5" value="448" style="width: 120px;" />
           </div>
           <span class="muted">Refer to the value determined by UniMAP.</span>
-          <div>
-            <div id="progressInfo" class="muted" style="font-size: 13px; margin-top: 18px;"><strong id="percentage">0</strong>%</div>
-          </div>
         </div>
       </div>
       <div class="muted">
@@ -555,7 +551,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
       summaryBody: document.getElementById("summaryBody"),
       totalJam: document.getElementById("totalJam"),
       maxTarget: document.getElementById("maxTarget"),
-      percentage: document.getElementById("percentage"),
       progressBar: document.getElementById("progressBar"),
       preview: document.getElementById("preview"),
       msg: document.getElementById("msg"),
@@ -1228,7 +1223,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
       const total = parseFloat(els.totalJam.textContent) || 0;
       const maxTarget = parseFloat(els.maxTarget.value) || 100;
       const pct = Math.min(100, Math.round((total / maxTarget) * 100));
-      els.percentage.textContent = pct;
       
       let bgColor = "#4caf50"; // green
       if (pct > 100) {
@@ -1239,7 +1233,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
       
       els.progressBar.style.width = pct + "%";
       els.progressBar.style.backgroundColor = bgColor;
-      els.progressBar.textContent = pct > 5 ? pct + "%" : "";
+      els.progressBar.style.textShadow = pct > 0 ? "0 1px 2px rgba(0, 0, 0, 0.35)" : "none";
+      els.progressBar.textContent = pct > 8 ? pct + "%" : "";
     }
 
     // --- Subject Management ---
