@@ -2,6 +2,8 @@
 
 Web app + Google Apps Script backend for calculating and verifying `Jam Beban Pengajaran` (teaching load) at UniMAP.
 
+This repository is open source under the MIT License. Anyone may use, modify, and improve it, subject to the license terms in [LICENSE](LICENSE).
+
 ## What this project does
 
 - Calculates teaching load (`Jam Beban`) per row using course/activity inputs.
@@ -81,3 +83,7 @@ Main actions handled by `doGet/doPost`:
 - Enforces helper email and active signed-in account match (`enforceUserExecution_`).
 - Rows are soft-deleted (`is_deleted = 1`) in `All_lecturer_record`.
 - Local browser cache is used for some UX state; server sheets are source of truth.
+
+## Disclaimer
+
+This project is an unofficial workload-calculation aid. It does not replace UniMAP, faculty, or administrative policy documents. Users remain responsible for reviewing calculations, verifying current rules, and confirming submitted records with the appropriate authority.

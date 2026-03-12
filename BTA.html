@@ -152,6 +152,20 @@ html, body { max-width: 100%; overflow-x: hidden; }
     }
     .landing-title { margin: 0 0 8px; font-size: clamp(1.4rem, 5vw, 2rem); line-height: 1.2; }
     .landing-sub { margin: 0 0 14px; color: #444; }
+    .landing-links { margin: 14px 0 0; font-size: 0.95rem; }
+    .landing-links a { color: #0056b3; font-weight: 600; text-decoration: none; }
+    .landing-links a:hover { text-decoration: underline; }
+    .landing-note {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #fff8e1;
+      border: 1px solid #f0d78c;
+      color: #5f4600;
+      text-align: left;
+      font-size: 0.92rem;
+      line-height: 1.45;
+    }
     .landing-foot { margin-top: 12px; font-size: 0.9rem; color: #666; }
 
     /* Section colors */
@@ -174,6 +188,14 @@ html, body { max-width: 100%; overflow-x: hidden; }
       <p class="landing-sub">Sistem pengiraan dan pengesahan rekod jam beban pengajaran.</p>
       <p style="margin: 0 0 14px; color: #0056b3; font-weight: 500;"><?= currentUserEmail ?></p>
       <button id="enterAppBtn" type="button">Enter System</button>
+      <p class="landing-links">
+        Open source on
+        <a href="https://github.com/fairusahmad/bta_calculator_unimap" target="_blank" rel="noopener noreferrer">GitHub</a>
+        for reuse, review, and improvement.
+      </p>
+      <div class="landing-note">
+        <strong>Important disclaimer:</strong> This tool is provided as an unofficial calculation aid. Users must verify all outputs against the latest UniMAP or faculty policies, workload rules, and approved records before submission or decision-making.
+      </div>
       <p class="landing-foot">Developed by Fairus, FKTEN</p>
     </div>
   </div>
