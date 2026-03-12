@@ -292,8 +292,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
       <span id="statusAdd" class="status"></span>
       <button id="saveCacheBtn" class="secondary">Save</button>
       <span id="statusSave" class="status"></span>
-      <button id="clearCacheBtn" class="secondary">Clear Cache</button>
-      <span id="statusClearCache" class="status"></span>
       <button id="submitVerifyBtn" class="secondary">Submit Pending for Verify</button>
       <span id="statusVerify" class="status"></span>
       <span id="preview" class="muted"></span>
@@ -561,9 +559,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
       msg: document.getElementById("msg"),
       statusAdd: document.getElementById("statusAdd"),
       statusSave: document.getElementById("statusSave"),
-      statusClearCache: document.getElementById("statusClearCache"),
       saveCacheBtn: document.getElementById("saveCacheBtn"),
-      clearCacheBtn: document.getElementById("clearCacheBtn"),
       backupName: document.getElementById("backupName"),
       lecturerEmail: document.getElementById("lecturerEmail"),
       ownerEmailWrap: document.getElementById("ownerEmailWrap"),
@@ -1383,22 +1379,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
       }, 2000);
     }
 
-    function clearCache() {
-      const ok = window.confirm("Are you sure you want to clear the saved cache?");
-      if (!ok) {
-        showStatus(els.statusClearCache, "Canceled");
-        return;
-      }
-      localStorage.removeItem(CACHE_KEY);
-      localStorage.removeItem(NAME_KEY);
-      subjects.length = 0;
-      renderSubjects();
-      if (els.backupName) els.backupName.value = "";
-      showStatus(els.statusClearCache, "Cleared");
-      els.msg.textContent = "Cache cleared.";
-      setTimeout(() => updatePreview(), 2000);
-    }
-
     function loadFromCache() {
       try {
         const raw = localStorage.getItem(CACHE_KEY);
@@ -1921,7 +1901,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
       });
     });
     els.saveCacheBtn.addEventListener("click", saveToCache);
-    els.clearCacheBtn.addEventListener("click", clearCache);
     els.backupName.addEventListener("input", () => {
       localStorage.setItem(NAME_KEY, els.backupName.value || "");
     });
