@@ -935,7 +935,7 @@ function enforceUniMapUser_() {
 function headersIndex_(headerRow) {
   const idx = {};
   for (let i = 0; i < headerRow.length; i++) {
-    idx[String(headerRow[i])] = i;
+    idx[String(headerRow[i])] = i + 1; // Use 1-based indexing for sheet columns
   }
   return idx;
 }
