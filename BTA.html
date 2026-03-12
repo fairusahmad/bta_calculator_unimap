@@ -38,6 +38,26 @@ html, body { max-width: 100%; overflow-x: hidden; }
       100% { background: #fff; color: #111; border-color: #111; }
     }
     .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+    .schedule-picker { display: flex; flex-direction: column; gap: 8px; }
+    .schedule-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .schedule-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #f2f2f2;
+      font-size: 0.8rem;
+    }
+    .schedule-chip button {
+      min-height: auto;
+      padding: 0 4px;
+      border: none;
+      background: transparent;
+      color: #111;
+      font-size: 0.9rem;
+      line-height: 1;
+    }
     table { width: 100%; border-collapse: collapse; font-size: clamp(0.8rem, 2.7vw, 0.95rem); }
     th, td { border-bottom: 1px solid #eee; padding: 6px 4px; text-align: center; }
     th { font-size: 0.76rem; color: #444; background: #fafafa; position: sticky; top: 0; font-weight: 600; }
@@ -253,24 +273,33 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
       <div>
         <label id="scheduleLabel" for="dateInput">Date</label>
-        <input id="dateInput" type="date" />
-        <select id="weekInput" style="display:none;">
-          <option value="1">Week 1</option>
-          <option value="2">Week 2</option>
-          <option value="3">Week 3</option>
-          <option value="4">Week 4</option>
-          <option value="5">Week 5</option>
-          <option value="6">Week 6</option>
-          <option value="7">Week 7</option>
-          <option value="8">Week 8</option>
-          <option value="9">Week 9</option>
-          <option value="10">Week 10</option>
-          <option value="11">Week 11</option>
-          <option value="12">Week 12</option>
-          <option value="13">Week 13</option>
-          <option value="14">Week 14</option>
-          <option value="15">Week 15</option>
-        </select>
+        <div class="schedule-picker">
+          <div id="datePickerWrap">
+            <div class="row" style="margin-top:0;">
+              <input id="dateInput" type="date" />
+              <button id="addDateBtn" class="secondary" type="button">Add Date</button>
+            </div>
+            <div id="selectedDates" class="schedule-list"></div>
+          </div>
+          <select id="weekInput" multiple size="6" style="display:none;">
+            <option value="1">Week 1</option>
+            <option value="2">Week 2</option>
+            <option value="3">Week 3</option>
+            <option value="4">Week 4</option>
+            <option value="5">Week 5</option>
+            <option value="6">Week 6</option>
+            <option value="7">Week 7</option>
+            <option value="8">Week 8</option>
+            <option value="9">Week 9</option>
+            <option value="10">Week 10</option>
+            <option value="11">Week 11</option>
+            <option value="12">Week 12</option>
+            <option value="13">Week 13</option>
+            <option value="14">Week 14</option>
+            <option value="15">Week 15</option>
+          </select>
+          <span id="scheduleHint" class="muted">Select one or more dates.</span>
+        </div>
       </div>
 
       <div>
@@ -543,8 +572,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
       jenis: document.getElementById("jenis"),
       kumpulan: document.getElementById("kumpulan"),
       dateInput: document.getElementById("dateInput"),
+      datePickerWrap: document.getElementById("datePickerWrap"),
+      addDateBtn: document.getElementById("addDateBtn"),
+      selectedDates: document.getElementById("selectedDates"),
       weekInput: document.getElementById("weekInput"),
       scheduleLabel: document.getElementById("scheduleLabel"),
+      scheduleHint: document.getElementById("scheduleHint"),
       pelajar: document.getElementById("pelajar"),
       addBtn: document.getElementById("addBtn"),
       tbody: document.getElementById("tbody"),
@@ -581,18 +614,63 @@ html, body { max-width: 100%; overflow-x: hidden; }
       return includesCI(j, "kuliah") || j.startsWith("1");
     }
 
+    function getSelectedWeeks_() {
+      return Array.from(els.weekInput.selectedOptions)
+        .map((opt) => Number(opt.value))
+        .filter((value) => Number.isFinite(value) && value >= 1 && value <= 15)
+        .sort((a, b) => a - b);
+    }
+
+    function getSelectedDates_() {
+      return [...selectedDateValues];
+    }
+
+    function renderSelectedDates_() {
+      if (!els.selectedDates) return;
+      const dates = getSelectedDates_();
+      if (!dates.length) {
+        els.selectedDates.innerHTML = `<span class="muted">No dates selected.</span>`;
+        return;
+      }
+      els.selectedDates.innerHTML = dates.map((value) => `
+        <span class="schedule-chip">
+          ${formatDateDisplay(value)}
+          <button type="button" data-remove-date="${value}" aria-label="Remove ${value}">&times;</button>
+        </span>
+      `).join("");
+    }
+
+    function addSelectedDate_(value) {
+      const normalized = String(value || "").trim();
+      if (!normalized || selectedDateValues.includes(normalized)) return false;
+      selectedDateValues.push(normalized);
+      selectedDateValues.sort();
+      renderSelectedDates_();
+      return true;
+    }
+
+    function removeSelectedDate_(value) {
+      const idx = selectedDateValues.indexOf(String(value || "").trim());
+      if (idx < 0) return false;
+      selectedDateValues.splice(idx, 1);
+      renderSelectedDates_();
+      return true;
+    }
+
     function updateScheduleInputMode() {
       const kuliah = isKuliah(els.jenis.value);
       if (kuliah) {
         els.scheduleLabel.setAttribute("for", "weekInput");
-        els.scheduleLabel.textContent = "Week";
-        els.dateInput.style.display = "none";
+        els.scheduleLabel.textContent = "Week(s)";
+        els.datePickerWrap.style.display = "none";
         els.weekInput.style.display = "";
+        els.scheduleHint.textContent = "Select one or more weeks.";
       } else {
         els.scheduleLabel.setAttribute("for", "dateInput");
-        els.scheduleLabel.textContent = "Date";
-        els.dateInput.style.display = "";
+        els.scheduleLabel.textContent = "Date(s)";
+        els.datePickerWrap.style.display = "";
         els.weekInput.style.display = "none";
+        els.scheduleHint.textContent = "Add one or more dates.";
       }
     }
 
@@ -608,6 +686,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
     const ADD_BUTTON_LABEL = "Add to Table";
     let syncAfterAddTimer = null;
     let syncAfterAddInFlight = false;
+    const selectedDateValues = [];
 
     function openDb() {
       return new Promise((resolve, reject) => {
@@ -1243,6 +1322,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
       const currentValue = els.subject.value;
       els.subject.innerHTML = `<option value="">-- Select Subject --</option>` + 
         subjects.map(s => `<option value="${s}">${s}</option>`).join("");
+
       els.subject.value = currentValue;
       applyOwnerBySubject_(false);
     }
@@ -1585,10 +1665,12 @@ html, body { max-width: 100%; overflow-x: hidden; }
       const peringkat = els.peringkat.value;
       const jenis = els.jenis.value;
       const kumpulan = els.kumpulan.value;
-      const dateInput = els.dateInput.value;
-      const week = Number(els.weekInput.value) || 1;
       const kuliah = isKuliah(jenis);
-      const dateDisplay = kuliah ? `Week ${week}` : formatDateDisplay(dateInput);
+      const selectedWeeks = kuliah ? getSelectedWeeks_() : [];
+      const selectedDates = kuliah ? [] : getSelectedDates_();
+      const dateInput = selectedDates[0] || "";
+      const week = selectedWeeks[0] || 1;
+      const dateDisplay = kuliah ? (selectedWeeks[0] ? `Week ${selectedWeeks[0]}` : "") : formatDateDisplay(dateInput);
       const pelajar = Number(els.pelajar.value);
       const helperEmail = String(els.lecturerEmail.value || "").trim();
       const isSelfOwnedMode = els.ownerEmailSelect.classList.contains('hidden');
@@ -1604,7 +1686,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
       if (!Number.isFinite(kredit) || kredit < 0) problems.push("Kredit");
       if (!Number.isFinite(jamMinggu) || jamMinggu < 0) problems.push("Jam Pertemuan (Mingguan)");
       if (!Number.isFinite(pelajar) || pelajar < 0) problems.push("Bilangan Pelajar");
-      if (kuliah && (!Number.isFinite(week) || week < 1 || week > 15)) problems.push("Week (1-15)");
+      if (kuliah && selectedWeeks.length === 0) problems.push("At least one Week");
+      if (!kuliah && selectedDates.length === 0) problems.push("At least one Date");
       if (!isUniMAPEmail(helperEmail)) problems.push("Lecturer Email (L1 @unimap.edu.my)");
       if (ownerMode !== "self" && !ownerEmail) problems.push("Owner mapping not found for selected subject");
       if (ownerMode !== "self" && !isUniMAPEmail(ownerEmail)) problems.push("Owner Email (L2 @unimap.edu.my)");
@@ -1619,6 +1702,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
         dateInput,
         dateDisplay,
         week,
+        selectedWeeks,
+        selectedDates,
         pelajar,
         helperEmail,
         ownerMode,
@@ -1744,7 +1829,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
     }
 
     function updatePreview() {
-      const { jamMinggu, jenis, pelajar, minggu, kumpulan, problems } = readInputs();
+      const { jamMinggu, jenis, pelajar, minggu, kumpulan, problems, selectedWeeks, selectedDates } = readInputs();
       if (problems.length) {
         els.preview.innerHTML = `<span class="danger">Check: ${problems.join(", ")}</span>`;
         return;
@@ -1756,7 +1841,9 @@ html, body { max-width: 100%; overflow-x: hidden; }
         bilanganPelajar: pelajar,
         bilanganMinggu: 1
       });
-      els.preview.textContent = `Preview -> Wajaran Beban Seminggu: ${calc.wajaran.toFixed(1)}, Jam Pelajar(>30): ${calc.jamPelajar.toFixed(1)}, Jam Beban: ${calc.jamBeban.toFixed(1)}`;
+      const scheduleCount = isKuliah(jenis) ? selectedWeeks.length : selectedDates.length;
+      const totalPreview = calc.jamBeban * scheduleCount;
+      els.preview.textContent = `Preview -> ${scheduleCount} entr${scheduleCount === 1 ? "y" : "ies"}, Wajaran Beban Seminggu: ${calc.wajaran.toFixed(1)}, Jam Pelajar(>30): ${calc.jamPelajar.toFixed(1)}, Jam Beban per entry: ${calc.jamBeban.toFixed(1)}, Total: ${totalPreview.toFixed(1)}`;
     }
 
     els.addBtn.addEventListener("click", async () => {
@@ -1768,7 +1855,19 @@ html, body { max-width: 100%; overflow-x: hidden; }
       }
       if (els.addBtn.disabled) return;
 
-      const row = {
+      const schedules = isKuliah(data.jenis)
+        ? data.selectedWeeks.map((value) => ({
+            dateInput: "",
+            dateDisplay: `Week ${value}`,
+            week: value,
+          }))
+        : data.selectedDates.map((value) => ({
+            dateInput: value,
+            dateDisplay: formatDateDisplay(value),
+            week: 0,
+          }));
+
+      const newRows = schedules.map((schedule) => ({
         subject: data.subject,
         semester: data.semester,
         kredit: data.kredit,
@@ -1776,9 +1875,9 @@ html, body { max-width: 100%; overflow-x: hidden; }
         peringkat: data.peringkat,
         jenis: data.jenis,
         kumpulan: data.kumpulan,
-        dateInput: data.dateInput,
-        dateDisplay: data.dateDisplay,
-        week: data.week,
+        dateInput: schedule.dateInput,
+        dateDisplay: schedule.dateDisplay,
+        week: schedule.week,
         pelajar: data.pelajar,
         helperEmail: data.helperEmail,
         ownerMode: data.ownerMode,
@@ -1789,33 +1888,64 @@ html, body { max-width: 100%; overflow-x: hidden; }
         recordId: makeId(),
         createdAt: new Date().toISOString(),
         minggu: 1,
-      };
+      }));
 
       setAddProcessing_(true);
-      rows.push(row);
+      rows.push(...newRows);
       render();
       saveToCache();
       updatePreview();
 
-      try {
-        await upsertRowToServer_(row);
-        queueSyncRowsAfterAdd_();
-        showStatus(els.statusAdd, "Added");
-      } catch (err) {
-        const rollbackIdx = rows.findIndex((r) => r.recordId === row.recordId);
-        if (rollbackIdx >= 0) {
-          rows.splice(rollbackIdx, 1);
-          render();
-          saveToCache();
-          updatePreview();
+      let okCount = 0;
+      let lastError = "";
+      const failedIds = [];
+
+      for (const row of newRows) {
+        try {
+          await upsertRowToServer_(row);
+          okCount += 1;
+        } catch (err) {
+          lastError = err && err.message ? err.message : "Add failed.";
+          failedIds.push(row.recordId);
+          appendLog("ERROR", "Add row failed", { record_id: row.recordId, error: lastError });
         }
-        const msg = err && err.message ? err.message : "Add failed.";
-        els.msg.innerHTML = `<span class="danger">${msg}</span>`;
-        appendLog("ERROR", "Add row failed", { error: msg });
-        showStatus(els.statusAdd, "Error");
-      } finally {
-        setAddProcessing_(false);
       }
+
+      if (failedIds.length) {
+        for (let i = rows.length - 1; i >= 0; i -= 1) {
+          if (failedIds.includes(rows[i].recordId)) {
+            rows.splice(i, 1);
+          }
+        }
+        render();
+        saveToCache();
+      }
+
+      if (okCount > 0) {
+        queueSyncRowsAfterAdd_();
+      }
+
+      if (okCount === newRows.length) {
+        showStatus(els.statusAdd, okCount === 1 ? "Added" : `Added ${okCount}`);
+      } else if (okCount > 0) {
+        els.msg.innerHTML = `<span class="danger">Added ${okCount} entries, failed ${failedIds.length}. ${lastError}</span>`;
+        showStatus(els.statusAdd, "Partial");
+      } else {
+        els.msg.innerHTML = `<span class="danger">${lastError}</span>`;
+        showStatus(els.statusAdd, "Error");
+      }
+
+      if (okCount > 0) {
+        if (isKuliah(data.jenis)) {
+          Array.from(els.weekInput.options).forEach((opt) => { opt.selected = false; });
+        } else {
+          selectedDateValues.length = 0;
+          renderSelectedDates_();
+        }
+      }
+
+      setAddProcessing_(false);
+      updatePreview();
     });
 
     document.getElementById("tbl").addEventListener("click", (e) => {
@@ -1912,6 +2042,23 @@ html, body { max-width: 100%; overflow-x: hidden; }
       document.getElementById(id).addEventListener("input", updatePreview);
       document.getElementById(id).addEventListener("change", updatePreview);
     });
+    els.addDateBtn.addEventListener("click", () => {
+      const value = String(els.dateInput.value || "").trim();
+      if (!value) {
+        showStatus(els.statusAdd, "Pick date");
+        return;
+      }
+      if (addSelectedDate_(value)) {
+        showStatus(els.statusAdd, "Date added", 1200);
+      }
+      updatePreview();
+    });
+    els.selectedDates.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-remove-date]");
+      if (!btn) return;
+      removeSelectedDate_(btn.getAttribute("data-remove-date"));
+      updatePreview();
+    });
     els.subject.addEventListener("change", () => {
       applyOwnerBySubject_();
       updatePreview();
@@ -1937,6 +2084,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
     }
     renderSubjects();
     renderSemesters();
+    renderSelectedDates_();
     render();
     loadFromCache();
     void syncSubjectsFromServer_().catch((err) => {
