@@ -4,7 +4,7 @@ const MALAYSIA_TZ = "Asia/Kuala_Lumpur";
 const ALL_LECTURER_SHEET_NAME = "All_lecturer_record";
 const SUBJECTS_SHEET_NAME = "Subjects";
 const EMAIL_BANK_SHEET_NAME = "EmailBank";
-const DEFAULT_SUBJECT_OWNER_EMAIL = "fairusahmad@unimap.edu.my";
+//const DEFAULT_SUBJECT_OWNER_EMAIL = "fairusahmad@unimap.edu.my";
 
 const HEADERS = [
   "request_id",
@@ -70,18 +70,18 @@ const EMAIL_BANK_HEADERS = [
   "updated_at"
 ];
 
-const DEFAULT_SUBJECTS = [
-  "DSC101",
-  "DSC102",
-  "DSC103",
-  "DSC104",
-  "DSC105",
-  "DSC106",
-  "DSC107",
-  "DSC108",
-  "DSC109",
-  "DSC110"
-];
+//const DEFAULT_SUBJECTS = [
+//  "DSC101",
+//  "DSC102",
+//  "DSC103",
+//  "DSC104",
+//  "DSC105",
+//  "DSC106",
+//  "DSC107",
+//  "DSC108",
+//  "DSC109",
+//  "DSC110"
+//];
 
 function doPost(e) {
   try {
@@ -935,7 +935,7 @@ function enforceUniMapUser_() {
 function headersIndex_(headerRow) {
   const idx = {};
   for (let i = 0; i < headerRow.length; i++) {
-    idx[String(headerRow[i])] = i + 1; // Use 1-based indexing for sheet columns
+    idx[String(headerRow[i])] = i;
   }
   return idx;
 }
