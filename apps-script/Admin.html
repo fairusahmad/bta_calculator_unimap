@@ -13,6 +13,7 @@
     button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; }
     button:hover { background-color: #0056b3; }
     button:disabled { background-color: #ccc; }
+    button.danger { background-color: #dc3545; } button.danger:hover { background-color: #c82333; }
     #status { margin-top: 10px; font-style: italic; color: #555; }
     table { width: 100%; border-collapse: collapse; margin-top: 20px; }
     th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
@@ -23,6 +24,7 @@
     .table-container { max-height: 40vh; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; }
     #subjectsTable th { position: sticky; top: 0; z-index: 1; } /* Keep headers visible on scroll */
     #subjectsTable th, #subjectsTable td { font-size: 0.9rem; padding: 6px 8px; }
+    #subjectsTable button { padding: 4px 8px; font-size: 0.8rem; }
 
     /* Styles for the owner autocomplete input */
     .owner-input-container { position: relative; }
@@ -49,14 +51,14 @@
     <h2>Add / Update Subject Owner</h2>
     <form id="subjectForm">
       <div>
-        <label for="subjectCode">Subject Code with subject name</label>
-        <input type="text" id="subjectCode" name="subjectCode" placeholder="e.g., DSC101 Subject A" required>
+        <label for="subjectCode">Subject Code</label>
+        <input type="text" id="subjectCode" name="subjectCode" placeholder="e.g., DSC101" required>
       </div>
       <div>
-        <label for="ownerSearchInput">Owner(s)-put all team teaching members</label>
+        <label for="ownerSearchInput">Owner(s)</label>
         <div class="owner-input-container">
           <div id="ownerPillsContainer" class="owner-pills">
-            <input type="text" id="ownerSearchInput" placeholder="Type name or email to search...if email not found, you can add directly by typing full email and pressing ';'">
+            <input type="text" id="ownerSearchInput" placeholder="Type name or email to search...">
           </div>
           <div id="autocompleteResults" class="autocomplete-results hidden"></div>
         </div>
@@ -77,6 +79,7 @@
           <tr>
             <th>Subject Code</th>
             <th>Owner Email(s)</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -85,11 +88,14 @@
               <tr>
                 <td><?= subjects[i].subject_code ?></td>
                 <td><?= subjects[i].owner_emails.join('; ') ?></td>
+                <td>
+                  <button class="danger" data-subject-code="<?= subjects[i].subject_code ?>">Delete</button>
+                </td>
               </tr>
             <? } ?>
           <? } else { ?>
             <tr>
-              <td colspan="2">No subjects found.</td>
+              <td colspan="3">No subjects found.</td>
             </tr>
           <? } ?>
         </tbody>
@@ -122,11 +128,14 @@
                 tr.innerHTML = `
                     <td>${subject.subject_code}</td>
                     <td>${subject.owner_emails.join('; ')}</td>
+                    <td>
+                        <button class="danger" data-subject-code="${subject.subject_code}">Delete</button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
         } else {
-            tbody.innerHTML = '<tr><td colspan="2">No subjects found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3">No subjects found.</td></tr>';
         }
     }
 
@@ -285,9 +294,38 @@
         .apiUpsertSubject(subjectCode, ownerEmail);
     });
 
-    // Handle clicks on the table to populate the form for easy editing
+    // Handle clicks on the table for "Edit" (populate form) and "Delete"
     document.getElementById('subjectsTable').addEventListener('click', function(e) {
         const target = e.target;
+
+        // Handle Delete button click
+        if (target.matches('button.danger[data-subject-code]')) {
+            const subjectCode = target.getAttribute('data-subject-code');
+            if (!confirm(`Are you sure you want to delete subject "${subjectCode}"? This will mark it as inactive.`)) {
+                return;
+            }
+
+            target.disabled = true;
+            target.textContent = 'Deleting...';
+
+            google.script.run
+                .withSuccessHandler(function(response) {
+                    if (response.ok) {
+                        refreshSubjects(); // Live update the list
+                    } else {
+                        alert('Error deleting subject: ' + response.message);
+                        target.disabled = false;
+                        target.textContent = 'Delete';
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    alert('Error deleting subject: ' + error.message);
+                    target.disabled = false;
+                    target.textContent = 'Delete';
+                })
+                .apiDeleteSubject(subjectCode);
+            return;
+        }
 
         // Handle clicking on a row to populate the form for easy editing
         const row = target.closest('tr');

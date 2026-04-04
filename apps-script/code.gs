@@ -150,7 +150,7 @@ function doGet(e) {
   if (view === 'admin') {
     // Serve the new admin page for subject management
     enforceUniMapUser_(); // Protect the admin page
-    const t = HtmlService.createTemplateFromFile("SubjectReg");
+    const t = HtmlService.createTemplateFromFile("Admin");
     const subjectsData = handleSubjects_();
     t.subjects = subjectsData.items || [];
     return t.evaluate().setTitle("Subject Management");
