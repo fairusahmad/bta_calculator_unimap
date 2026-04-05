@@ -4,6 +4,7 @@ const MALAYSIA_TZ = "Asia/Kuala_Lumpur";
 const ALL_LECTURER_SHEET_NAME = "All_lecturer_record";
 const SUBJECTS_SHEET_NAME = "Subjects";
 const EMAIL_BANK_SHEET_NAME = "EmailBank";
+const LIST_OF_SUBJECT_SHEET_NAME = "List_of_Subject"; // New constant for the subject list sheet
 //const DEFAULT_SUBJECT_OWNER_EMAIL = "fairusahmad@unimap.edu.my";
 
 const HEADERS = [
@@ -137,6 +138,7 @@ function setupSheets_() {
   getSheet_();
   getAllLecturerSheet_();
   getSubjectsSheet_();
+  getListofSubjectSheet_(); // Ensure the List_of_Subject sheet is also set up
   getEmailBankSheet_();
 }
 
@@ -151,10 +153,10 @@ function doGet(e) {
     // Serve the new admin page for subject management
     enforceUniMapUser_(); // Protect the admin page
     const t = HtmlService.createTemplateFromFile("SubjectReg");
-    const subjectsData = handleSubjects_(); // This gets subjects for the main table
-    const subjectListData = handleGetSubjectList_(); // This gets subjects for the dropdown
-    t.subjects = subjectsData.items || []; // For the table
-    t.subjectList = subjectListData.items || []; // For the datalist
+    const subjectsData = handleSubjects_();
+    const listOfSubjectsData = apiGetListOfSubjects(); // Fetch the list of subjects for the datalist
+    t.subjectList = listOfSubjectsData.items || []; // Pass it to the template
+    t.subjects = subjectsData.items || [];
     return t.evaluate().setTitle("Subject Management");
   }
 
@@ -329,44 +331,58 @@ function apiSearchUsers(query) {
   }
 }
 
-function apiGetSubjectList() {
+/**
+ * API function to get all users from the EmailBank sheet.
+ * @returns {{ok: boolean, items: Array<{name: string, email: string}>, message: string}}
+ */
+function apiGetAllUsersFromBank() {
   try {
-    return handleGetSubjectList_();
+    const sh = getEmailBankSheet_();
+    const values = sh.getDataRange().getValues();
+    if (values.length < 2) {
+      return { ok: true, items: [] };
+    }
+
+    const idx = headersIndex_(values[0]);
+    const items = [];
+
+    for (let r = 1; r < values.length; r++) {
+      const email = String(values[r][idx.email] || "").trim();
+      const name = String(values[r][idx.name] || "").trim();
+      if (email && name) {
+        items.push({ name: name, email: email.toLowerCase() });
+      }
+    }
+    items.sort((a, b) => a.name.localeCompare(b.name));
+    return { ok: true, items: items };
   } catch (err) {
-    return { ok: false, message: err.message };
+    return { ok: false, message: "Failed to get users from EmailBank: " + err.message, items: [] };
   }
 }
 
 /**
- * Public API function to get the list of subjects for dropdowns.
- * This is callable from the client-side via google.script.run.
+ * API function to get all subject codes from the List_of_Subject sheet.
+ * Assumes subject codes are in the first column.
+ * @returns {{ok: boolean, items: string[], message: string}}
  */
-function apiGetSubjectList() {
-  // This function is now correctly exposed for google.script.run
-  return handleGetSubjectList_();
-}
-
-function handleGetSubjectList_() {
-  // This function reads the first column from a sheet named "List_of_Subject".
-  // No authentication is enforced, as it's for a public dropdown list.
-  const sheetName = "List_of_Subject";
+function apiGetListOfSubjects() {
   try {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const sheet = ss.getSheetByName(sheetName);
-    if (!sheet) {
-      // If the sheet doesn't exist, return an empty list.
-      // This prevents errors on the frontend.
+    const sh = getListofSubjectSheet_();
+    const values = sh.getDataRange().getValues();
+    if (values.length < 2) { // Assuming header row and at least one data row
       return { ok: true, items: [] };
     }
-    const range = sheet.getDataRange();
-    const values = range.getValues();
-    
-    // Assumes subjects are in the first column (A), skipping the header row (row 1).
-    const subjects = values.slice(1).map(row => row[0]).filter(String);
-    
-    return { ok: true, items: subjects };
-  } catch (e) {
-    return { ok: false, message: `Could not read from sheet: ${sheetName}. Error: ${e.message}` };
+
+    const subjectCodes = [];
+    for (let r = 1; r < values.length; r++) {
+      const subjectCode = String(values[r][0] || "").trim(); // Get value from the first column
+      if (subjectCode) {
+        subjectCodes.push(subjectCode);
+      }
+    }
+    return { ok: true, items: subjectCodes };
+  } catch (err) {
+    return { ok: false, message: "Failed to get list of subjects: " + err.message, items: [] };
   }
 }
 
@@ -941,6 +957,22 @@ function getEmailBankSheet_() {
       "Another Name",
       malaysiaNowIso_()
     ]);
+  }
+  return sh;
+}
+
+function getListofSubjectSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  ss.setSpreadsheetTimeZone(MALAYSIA_TZ);
+  let sh = ss.getSheetByName(LIST_OF_SUBJECT_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(LIST_OF_SUBJECT_SHEET_NAME);
+    // Add a sample header and some data to guide the user
+    sh.appendRow(["Subject Code with subject name"]);
+    sh.appendRow(["DSC101 Introduction to Programming"]);
+    sh.appendRow(["DSC102 Data Structures"]);
+    sh.appendRow(["DSC103 Algorithms"]);
+    sh.appendRow(["DSC104 Web Development"]); // Added another sample
   }
   return sh;
 }
