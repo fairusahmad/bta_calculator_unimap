@@ -147,12 +147,14 @@ function doGet(e) {
   const action = String(p.action || "").toLowerCase();
   const view = String(p.view || "").toLowerCase();
 
-  if (view === 'admin') {
+  if (view === 'subjectreg') {
     // Serve the new admin page for subject management
     enforceUniMapUser_(); // Protect the admin page
-    const t = HtmlService.createTemplateFromFile("Admin");
-    const subjectsData = handleSubjects_();
-    t.subjects = subjectsData.items || [];
+    const t = HtmlService.createTemplateFromFile("SubjectReg");
+    const subjectsData = handleSubjects_(); // This gets subjects for the main table
+    const subjectListData = handleGetSubjectList_(); // This gets subjects for the dropdown
+    t.subjects = subjectsData.items || []; // For the table
+    t.subjectList = subjectListData.items || []; // For the datalist
     return t.evaluate().setTitle("Subject Management");
   }
 
@@ -324,6 +326,47 @@ function apiSearchUsers(query) {
     return handleSearchUsers_(query);
   } catch (err) {
     return { ok: false, message: err.message, items: [] };
+  }
+}
+
+function apiGetSubjectList() {
+  try {
+    return handleGetSubjectList_();
+  } catch (err) {
+    return { ok: false, message: err.message };
+  }
+}
+
+/**
+ * Public API function to get the list of subjects for dropdowns.
+ * This is callable from the client-side via google.script.run.
+ */
+function apiGetSubjectList() {
+  // This function is now correctly exposed for google.script.run
+  return handleGetSubjectList_();
+}
+
+function handleGetSubjectList_() {
+  // This function reads the first column from a sheet named "List_of_Subject".
+  // No authentication is enforced, as it's for a public dropdown list.
+  const sheetName = "List_of_Subject";
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+      // If the sheet doesn't exist, return an empty list.
+      // This prevents errors on the frontend.
+      return { ok: true, items: [] };
+    }
+    const range = sheet.getDataRange();
+    const values = range.getValues();
+    
+    // Assumes subjects are in the first column (A), skipping the header row (row 1).
+    const subjects = values.slice(1).map(row => row[0]).filter(String);
+    
+    return { ok: true, items: subjects };
+  } catch (e) {
+    return { ok: false, message: `Could not read from sheet: ${sheetName}. Error: ${e.message}` };
   }
 }
 

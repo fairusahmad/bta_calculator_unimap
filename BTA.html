@@ -696,6 +696,17 @@ html, body { max-width: 100%; overflow-x: hidden; }
       }
     }
 
+    function updateKumpulanInputMode() {
+      const kuliah = isKuliah(els.jenis.value);
+      if (kuliah) {
+        els.kumpulan.disabled = false;
+      } else {
+        // Lock to "Kumpulan Pertama" for Makmal, Tutorial, etc.
+        els.kumpulan.value = "1 - Kumpulan Pertama";
+        els.kumpulan.disabled = true;
+      }
+    }
+
     const subjects = [];
     const semesters = ["1 2025/2026"];
     const rows = [];
@@ -2088,6 +2099,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
     els.jenis.addEventListener("change", () => {
       updateScheduleInputMode();
+      updateKumpulanInputMode();
       updatePreview();
     });
 
@@ -2117,6 +2129,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
     });
     syncNameFromLecturerEmail_();
     updateScheduleInputMode();
+    updateKumpulanInputMode();
     updateOwnerInputMode();
 
     if (!els.dateInput.value) {
