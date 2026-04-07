@@ -10,19 +10,28 @@
     .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     h1, h2 { color: #111; border-bottom: 1px solid #eee; padding-bottom: 10px; }
     label { display: block; margin-bottom: 5px; font-weight: 600; }
-    input[type="text"], input[type="email"] { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    input[type="text"], input[type="email"], select { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
     button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; }
     button:hover { background-color: #0056b3; }
     button:disabled { background-color: #ccc; }
     #status { margin-top: 10px; font-style: italic; color: #555; }
+    .owner-picker { display: flex; gap: 8px; align-items: flex-start; }
+    .owner-picker select { flex: 1; }
+    .selected-owners { border: 1px solid #ddd; border-radius: 4px; margin: 0 0 10px; min-height: 42px; padding: 8px; }
+    .selected-owners-empty { color: #777; font-size: 0.9rem; margin: 0; }
+    .selected-owner { align-items: center; background: #eef6ff; border: 1px solid #cfe2ff; border-radius: 4px; display: flex; justify-content: space-between; margin-bottom: 6px; padding: 6px 8px; }
+    .selected-owner:last-child { margin-bottom: 0; }
+    .remove-owner-btn { background-color: #dc3545; font-size: 0.85rem; padding: 4px 8px; }
+    .remove-owner-btn:hover { background-color: #b02a37; }
+    .help-text { color: #666; font-size: 0.9rem; margin: -4px 0 8px; }
+    .owner-warning { color: #dc3545; font-size: 1.15rem; font-weight: 700; margin: -2px 0 8px; }
     table { width: 100%; border-collapse: collapse; margin-top: 20px; }
     th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
     th { background-color: #f2f2f2; }
     tr:nth-child(even) { background-color: #f9f9f9; }
     
-    /* Styles for the scrollable subject list */
-    .table-container { max-height: 40vh; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; }
-    #subjectsTable th { position: sticky; top: 0; z-index: 1; } /* Keep headers visible on scroll */
+    /* Styles for the subject list */
+    .table-container { border: 1px solid #ddd; border-radius: 4px; }
     #subjectsTable th, #subjectsTable td { font-size: 0.9rem; padding: 6px 8px; }
 
     .hidden { display: none; }
@@ -46,8 +55,15 @@
         <? } ?>
       </datalist>
       <div>
-        <label for="ownerSelect">Owner(s)-put all team teaching members</label>
-        <select id="ownerSelect" name="ownerSelect" multiple required style="height: 150px; margin-bottom: 10px; width: 100%;"></select>
+        <label for="ownerSelect">Owner(s) - add all team teaching members one by one</label>
+        <p class="owner-warning">DO NOT INCLUDE LAB/CLASS ASSISTANT</p>
+        <p class="help-text">Choose one owner, click "Add Owner", then repeat for each team teaching member.</p>
+        <div class="owner-picker">
+          <select id="ownerSelect" name="ownerSelect"></select>
+          <button id="addOwnerBtn" type="button">Add Owner</button>
+        </div>
+        <label>Selected owner(s) before save</label>
+        <div id="selectedOwners" class="selected-owners"></div>
       </div>
       <button type="submit" id="submitBtn">Save Subject</button>
     </form>
@@ -85,6 +101,8 @@
   </div>
 
   <script>
+    let selectedOwners = [];
+
     function setStatus(el, text, isError = false, timeoutMs = 3000) {
         el.textContent = text;
         el.style.color = isError ? '#dc3545' : '#555';
@@ -93,6 +111,82 @@
                 if (el.textContent === text) el.textContent = '';
             }, timeoutMs);
         }
+    }
+
+    function renderSelectedOwners() {
+        const selectedOwnersEl = document.getElementById('selectedOwners');
+        selectedOwnersEl.innerHTML = '';
+
+        if (selectedOwners.length === 0) {
+            const emptyText = document.createElement('p');
+            emptyText.className = 'selected-owners-empty';
+            emptyText.textContent = 'No owner selected yet.';
+            selectedOwnersEl.appendChild(emptyText);
+            return;
+        }
+
+        selectedOwners.forEach(owner => {
+            const ownerRow = document.createElement('div');
+            ownerRow.className = 'selected-owner';
+
+            const ownerText = document.createElement('span');
+            ownerText.textContent = owner.label;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'remove-owner-btn';
+            removeBtn.textContent = 'Remove';
+            removeBtn.addEventListener('click', function() {
+                selectedOwners = selectedOwners.filter(item => item.email !== owner.email);
+                renderSelectedOwners();
+            });
+
+            ownerRow.appendChild(ownerText);
+            ownerRow.appendChild(removeBtn);
+            selectedOwnersEl.appendChild(ownerRow);
+        });
+    }
+
+    function addSelectedOwner() {
+        const ownerSelect = document.getElementById('ownerSelect');
+        const selectedOption = ownerSelect.options[ownerSelect.selectedIndex];
+        const statusEl = document.getElementById('status');
+
+        if (!selectedOption || !selectedOption.value) {
+            setStatus(statusEl, 'Please choose an owner first.', true);
+            return;
+        }
+
+        const email = selectedOption.value.trim().toLowerCase();
+        if (selectedOwners.some(owner => owner.email === email)) {
+            setStatus(statusEl, 'This owner is already selected.', true);
+            return;
+        }
+
+        selectedOwners.push({
+            email: email,
+            label: selectedOption.textContent
+        });
+        ownerSelect.value = '';
+        renderSelectedOwners();
+        setStatus(statusEl, 'Owner added. Add another owner or save the subject.', false, 2000);
+    }
+
+    function setSelectedOwnersByEmails(emails) {
+        const ownerSelect = document.getElementById('ownerSelect');
+        selectedOwners = [];
+
+        emails.forEach(email => {
+            const normalizedEmail = email.trim().toLowerCase();
+            const option = Array.from(ownerSelect.options).find(opt => opt.value.trim().toLowerCase() === normalizedEmail);
+
+            selectedOwners.push({
+                email: normalizedEmail,
+                label: option ? option.textContent : normalizedEmail
+            });
+        });
+
+        renderSelectedOwners();
     }
 
     function renderSubjects(subjects) {
@@ -134,28 +228,37 @@
 
     function loadOwners() {
         const ownerSelect = document.getElementById('ownerSelect');
-        ownerSelect.innerHTML = '<option>Loading owners...</option>';
+        const addOwnerBtn = document.getElementById('addOwnerBtn');
+        ownerSelect.innerHTML = '<option value="">Loading owners...</option>';
         ownerSelect.disabled = true;
+        addOwnerBtn.disabled = true;
 
         google.script.run
             .withSuccessHandler(function(response) {
-                ownerSelect.innerHTML = '';
-                ownerSelect.disabled = false;
                 if (response.ok && response.items.length > 0) {
+                    ownerSelect.innerHTML = '<option value="">-- Choose owner to add --</option>';
+                    ownerSelect.disabled = false;
+                    addOwnerBtn.disabled = false;
                     response.items.forEach(user => {
                         const option = document.createElement('option');
                         option.value = user.email;
                         option.textContent = `${user.name} (${user.email})`;
                         ownerSelect.appendChild(option);
                     });
+                    if (selectedOwners.length > 0) {
+                        setSelectedOwnersByEmails(selectedOwners.map(owner => owner.email));
+                    }
                 } else {
-                    ownerSelect.innerHTML = '<option>Could not load owners from EmailBank.</option>';
+                    ownerSelect.innerHTML = '<option value="">Could not load owners from EmailBank.</option>';
+                    ownerSelect.disabled = true;
+                    addOwnerBtn.disabled = true;
                     setStatus(document.getElementById('status'), 'Failed to load owners: ' + (response.message || 'Unknown error'), true);
                 }
             })
             .withFailureHandler(function(error) {
-                ownerSelect.innerHTML = '<option>Error loading owners.</option>';
+                ownerSelect.innerHTML = '<option value="">Error loading owners.</option>';
                 ownerSelect.disabled = true;
+                addOwnerBtn.disabled = true;
                 setStatus(document.getElementById('status'), 'Error: ' + error.message, true);
             })
             .apiGetAllUsersFromBank();
@@ -171,8 +274,14 @@
       setStatus(statusEl, 'Processing...', false, 0);
 
       var subjectCode = document.getElementById('subjectCode').value.trim();
-      var selectedOwners = Array.from(document.getElementById('ownerSelect').selectedOptions).map(opt => opt.value);
-      var ownerEmail = selectedOwners.join(';');
+      if (selectedOwners.length === 0) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Save Subject';
+        setStatus(statusEl, 'Please add at least one owner before saving.', true);
+        return;
+      }
+
+      var ownerEmail = selectedOwners.map(owner => owner.email).join(';');
 
       google.script.run
         .withSuccessHandler(function(response) {
@@ -181,7 +290,8 @@
           if (response.ok) {
             setStatus(statusEl, 'Successfully saved: ' + response.subject_code, false);
             document.getElementById('subjectForm').reset();
-            document.getElementById('ownerSelect').selectedIndex = -1; // Deselect all
+            selectedOwners = [];
+            renderSelectedOwners();
             refreshSubjects(); // Live update the list
           } else {
             setStatus(statusEl, 'Error: ' + response.message, true);
@@ -206,25 +316,20 @@
         const ownerSelect = document.getElementById('ownerSelect');
         const emails = row.cells[1].textContent.trim().split(';').map(e => e.trim().toLowerCase()).filter(Boolean);
 
-        // Deselect all options first
-        Array.from(ownerSelect.options).forEach(opt => opt.selected = false);
-
-        // Select the options that match the emails from the table
-        emails.forEach(email => {
-            const option = ownerSelect.querySelector(`option[value="${email}"]`);
-            if (option) {
-                option.selected = true;
-            }
-        });
-
         document.getElementById('subjectCode').value = row.cells[0].textContent.trim();
+        ownerSelect.value = '';
+        setSelectedOwnersByEmails(emails);
         document.getElementById('subjectCode').focus(); // Bring focus to the form
     });
 
+    document.getElementById('addOwnerBtn').addEventListener('click', addSelectedOwner);
     document.getElementById('refreshBtn').addEventListener('click', refreshSubjects);
 
     // Load the list of owners when the page loads
-    window.addEventListener('load', loadOwners);
+    window.addEventListener('load', function() {
+        renderSelectedOwners();
+        loadOwners();
+    });
   </script>
 </body>
 </html>
