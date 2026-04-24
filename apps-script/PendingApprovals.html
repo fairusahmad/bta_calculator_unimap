@@ -74,9 +74,12 @@
     <section id="cards" class="cards"></section>
   </div>
 
+  <script id="pendingApprovalsData" type="application/json"><?!= JSON.stringify(pendingApprovals || []) ?></script>
+
   <script>
+    const initialItemsEl = document.getElementById("pendingApprovalsData");
     const state = {
-      items: <?= JSON.stringify(pendingApprovals || []) ?>
+      items: JSON.parse(initialItemsEl ? initialItemsEl.textContent : "[]")
     };
 
     function escapeHtml(text) {
