@@ -1,0 +1,243 @@
+<!doctype html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Pending Approvals</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --line: #d9e2ec;
+      --primary: #0d6efd;
+      --primary-dark: #0a58ca;
+      --success: #198754;
+      --success-dark: #146c43;
+      --danger: #dc3545;
+      --danger-dark: #b02a37;
+      --warning-bg: #fff4db;
+      --warning-text: #8a5a00;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: linear-gradient(180deg, #eef4ff 0%, var(--bg) 40%, #f8fafc 100%); color: var(--text); font-family: "Segoe UI", Arial, sans-serif; }
+    .page { max-width: 1080px; margin: 0 auto; padding: 24px 16px 40px; }
+    .hero { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); padding: 24px; margin-bottom: 18px; }
+    .eyebrow { color: var(--primary); font-size: 0.9rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 8px; }
+    h1 { margin: 0 0 8px; font-size: clamp(1.7rem, 3vw, 2.4rem); }
+    .subtext { color: var(--muted); margin: 0; line-height: 1.5; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; align-items: center; }
+    .summary { display: inline-flex; align-items: center; gap: 8px; background: var(--warning-bg); color: var(--warning-text); border-radius: 999px; padding: 8px 12px; font-weight: 600; }
+    .status { min-height: 24px; color: var(--muted); font-size: 0.95rem; margin-top: 14px; }
+    .cards { display: grid; gap: 14px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05); }
+    .card-top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+    .subject { margin: 0; font-size: 1.1rem; }
+    .meta { color: var(--muted); display: grid; gap: 6px; margin-top: 12px; }
+    .pill { display: inline-block; background: var(--warning-bg); color: var(--warning-text); border-radius: 999px; padding: 6px 10px; font-size: 0.85rem; font-weight: 700; }
+    .btn { appearance: none; border: none; border-radius: 10px; cursor: pointer; font-size: 0.95rem; padding: 10px 14px; transition: background-color 0.15s ease, opacity 0.15s ease; }
+    .btn:disabled { cursor: not-allowed; opacity: 0.65; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover { background: var(--success-dark); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: var(--danger-dark); }
+    .btn-secondary { background: #e9eef5; color: #1f2937; }
+    .btn-secondary:hover { background: #dce5f0; }
+    .card-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+    .empty { background: var(--card); border: 1px dashed var(--line); border-radius: 16px; color: var(--muted); padding: 28px 20px; text-align: center; }
+    .btn-link { text-decoration: none; display: inline-block; }
+
+    @media (max-width: 640px) {
+      .page { padding-left: 12px; padding-right: 12px; }
+      .card-actions .btn, .actions .btn, .actions .btn-link { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <p class="eyebrow">Owner Workspace</p>
+      <h1>My Pending Approvals</h1>
+      <p class="subtext">Signed in as <strong><?= currentUserName ?></strong> (<?= currentUserEmail ?>). Review requests here even if the original approval email is no longer in your inbox.</p>
+      <div class="actions">
+        <button id="refreshBtn" class="btn btn-primary" type="button">Refresh List</button>
+        <a class="btn btn-secondary btn-link" href="<?= appUrl ?>">Open Main BTA App</a>
+        <div class="summary"><span id="pendingCount"><?= pendingApprovals.length ?></span> pending request(s)</div>
+      </div>
+      <div id="pageStatus" class="status"></div>
+    </section>
+
+    <section id="cards" class="cards"></section>
+  </div>
+
+  <script>
+    const state = {
+      items: <?= JSON.stringify(pendingApprovals || []) ?>
+    };
+
+    function escapeHtml(text) {
+      return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function setStatus(text, isError) {
+      const el = document.getElementById("pageStatus");
+      el.textContent = text || "";
+      el.style.color = isError ? "#dc3545" : "#6b7280";
+    }
+
+    function updatePendingCount() {
+      document.getElementById("pendingCount").textContent = state.items.length;
+    }
+
+    function setButtonsDisabled(disabled) {
+      document.querySelectorAll("[data-action]").forEach(btn => {
+        btn.disabled = disabled;
+      });
+      document.getElementById("refreshBtn").disabled = disabled;
+    }
+
+    function render() {
+      const cards = document.getElementById("cards");
+      updatePendingCount();
+
+      if (!state.items.length) {
+        cards.innerHTML = '<div class="empty">No pending approvals right now.</div>';
+        return;
+      }
+
+      cards.innerHTML = state.items.map(item => `
+        <article class="card">
+          <div class="card-top">
+            <div>
+              <h2 class="subject">${escapeHtml(item.subject_code)}</h2>
+              <div class="meta">
+                <div><strong>Submitted by:</strong> ${escapeHtml(item.helper_lecturer_name || item.helper_lecturer_email)} (${escapeHtml(item.helper_lecturer_email)})</div>
+                <div><strong>Semester:</strong> ${escapeHtml(item.semester || "-")}</div>
+                <div><strong>Type:</strong> ${escapeHtml(item.jenis || "-")}</div>
+                <div><strong>Schedule:</strong> ${escapeHtml(item.schedule || "-")}</div>
+                <div><strong>Submitted at:</strong> ${escapeHtml(item.created_at || "-")}</div>
+              </div>
+            </div>
+            <span class="pill">Pending</span>
+          </div>
+          <div class="card-actions">
+            <button class="btn btn-success" type="button" data-action="approve" data-request-id="${escapeHtml(item.request_id)}">Approve</button>
+            <button class="btn btn-danger" type="button" data-action="reject" data-request-id="${escapeHtml(item.request_id)}">Reject</button>
+            <button class="btn btn-secondary" type="button" data-action="resend" data-request-id="${escapeHtml(item.request_id)}">Resend Email</button>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function removeRequest(requestId) {
+      state.items = state.items.filter(item => item.request_id !== requestId);
+      render();
+    }
+
+    function findRequest(requestId) {
+      return state.items.find(item => item.request_id === requestId);
+    }
+
+    function refreshList() {
+      setStatus("Refreshing pending approvals...", false);
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (!response || response.ok === false) {
+            setStatus("Error: " + ((response && response.message) || "Unable to load approvals."), true);
+            return;
+          }
+          state.items = Array.isArray(response.items) ? response.items : [];
+          render();
+          setStatus(state.items.length ? "Pending approvals updated." : "No pending approvals right now.", false);
+        })
+        .withFailureHandler(function(error) {
+          setStatus("Error: " + error.message, true);
+        })
+        .apiGetMyPendingApprovals();
+    }
+
+    function handleDecision(requestId, decision) {
+      const item = findRequest(requestId);
+      if (!item) {
+        setStatus("This request is no longer in the list.", true);
+        refreshList();
+        return;
+      }
+
+      const verb = decision === "Approved" ? "approve" : "reject";
+      if (!window.confirm(`Are you sure you want to ${verb} ${item.subject_code}?`)) return;
+
+      setButtonsDisabled(true);
+      setStatus(`Saving ${verb} decision...`, false);
+      google.script.run
+        .withSuccessHandler(function(response) {
+          setButtonsDisabled(false);
+          if (!response || response.ok === false) {
+            setStatus("Error: " + ((response && response.message) || "Unable to save decision."), true);
+            refreshList();
+            return;
+          }
+          removeRequest(requestId);
+          setStatus(response.message || `Request ${verb}d.`, false);
+        })
+        .withFailureHandler(function(error) {
+          setButtonsDisabled(false);
+          setStatus("Error: " + error.message, true);
+        })
+        .apiHandleApprovalDecision(item.record_id, item.approval_token, decision, "");
+    }
+
+    function handleResend(requestId) {
+      const item = findRequest(requestId);
+      if (!item) {
+        setStatus("This request is no longer in the list.", true);
+        refreshList();
+        return;
+      }
+
+      setButtonsDisabled(true);
+      setStatus(`Resending email for ${item.subject_code}...`, false);
+      google.script.run
+        .withSuccessHandler(function(response) {
+          setButtonsDisabled(false);
+          if (!response || response.ok === false) {
+            setStatus("Error: " + ((response && response.message) || "Unable to resend email."), true);
+            refreshList();
+            return;
+          }
+          setStatus(response.message || "Approval email resent.", false);
+        })
+        .withFailureHandler(function(error) {
+          setButtonsDisabled(false);
+          setStatus("Error: " + error.message, true);
+        })
+        .apiResendApprovalEmail(requestId);
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", refreshList);
+    document.getElementById("cards").addEventListener("click", function(event) {
+      const btn = event.target.closest("[data-action]");
+      if (!btn) return;
+
+      const action = btn.getAttribute("data-action");
+      const requestId = btn.getAttribute("data-request-id");
+      if (!requestId) return;
+
+      if (action === "approve") handleDecision(requestId, "Approved");
+      if (action === "reject") handleDecision(requestId, "Rejected");
+      if (action === "resend") handleResend(requestId);
+    });
+
+    render();
+  </script>
+</body>
+</html>

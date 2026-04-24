@@ -122,6 +122,12 @@ function doPost(e) {
         decision_source: "api"
       }));
     }
+    if (action === "pending_approvals") {
+      return jsonOut(handlePendingApprovalsForOwner_(payload.owner_email || ""));
+    }
+    if (action === "resend_approval_email") {
+      return jsonOut(handleResendApprovalEmail_(payload.request_id || ""));
+    }
     return jsonOut({ ok: false, message: "Unsupported action." });
   } catch (err) {
     return jsonOut({ ok: false, message: err.message });
@@ -160,6 +166,17 @@ function doGet(e) {
     return t.evaluate().setTitle("Subject Management");
   }
 
+  if (view === "pendingapprovals") {
+    enforceUniMapUser_();
+    const currentUserEmail = normalizeEmail_(Session.getActiveUser().getEmail());
+    const t = HtmlService.createTemplateFromFile("PendingApprovals");
+    t.currentUserEmail = currentUserEmail;
+    t.currentUserName = resolveDisplayName_(currentUserEmail);
+    t.pendingApprovals = handlePendingApprovalsForOwner_(currentUserEmail).items || [];
+    t.appUrl = buildAppUrl_();
+    return t.evaluate().setTitle("My Pending Approvals");
+  }
+
 
   if (action === "submit") {
     try {
@@ -189,6 +206,22 @@ function doGet(e) {
   if (action === "subjects") {
     try {
       return jsonOrJsonp_(handleSubjects_(), p.callback);
+    } catch (err) {
+      return jsonOrJsonp_({ ok: false, message: err.message }, p.callback);
+    }
+  }
+
+  if (action === "pending_approvals") {
+    try {
+      return jsonOrJsonp_(handlePendingApprovalsForOwner_(p.owner_email || ""), p.callback);
+    } catch (err) {
+      return jsonOrJsonp_({ ok: false, message: err.message, items: [] }, p.callback);
+    }
+  }
+
+  if (action === "resend_approval_email") {
+    try {
+      return jsonOrJsonp_(handleResendApprovalEmail_(p.request_id || ""), p.callback);
     } catch (err) {
       return jsonOrJsonp_({ ok: false, message: err.message }, p.callback);
     }
@@ -245,8 +278,14 @@ function doGet(e) {
     });
     const title = result.ok ? "Decision Recorded" : "Decision Failed";
     const body = result.ok ? "Thank you. The verification decision has been saved." : "Unable to process verification request.";
+    const pendingLink = `${buildAppUrl_()}?view=pendingapprovals`;
     return HtmlService.createHtmlOutput(
-      `<h2>${escapeHtml_(title)}</h2><p>${escapeHtml_(body)}</p><p>${escapeHtml_(result.message || "")}</p>`
+      `<div style="font-family:Arial,sans-serif;max-width:680px;margin:32px auto;padding:24px;border:1px solid #ddd;border-radius:12px;background:#fff;">
+        <h2 style="margin-top:0;">${escapeHtml_(title)}</h2>
+        <p>${escapeHtml_(body)}</p>
+        <p>${escapeHtml_(result.message || "")}</p>
+        <p style="margin-top:20px;"><a href="${escapeHtml_(pendingLink)}" style="display:inline-block;background:#0d6efd;color:#fff;text-decoration:none;padding:10px 14px;border-radius:8px;">Open My Pending Approvals</a></p>
+      </div>`
     );
   }
 
@@ -304,6 +343,36 @@ function apiGetSubjects() {
     return handleSubjects_();
   } catch (err) {
     return { ok: false, message: err.message, items: [] };
+  }
+}
+
+function apiGetMyPendingApprovals() {
+  try {
+    return handlePendingApprovalsForOwner_();
+  } catch (err) {
+    return { ok: false, message: err.message, items: [] };
+  }
+}
+
+function apiResendApprovalEmail(requestId) {
+  try {
+    return handleResendApprovalEmail_(requestId || "");
+  } catch (err) {
+    return { ok: false, message: err.message };
+  }
+}
+
+function apiHandleApprovalDecision(recordId, token, decision, comment) {
+  try {
+    return handleDecision_({
+      record_id: recordId,
+      token: token,
+      decision: decision,
+      approver_comment: comment || "",
+      decision_source: "pending_approvals_page"
+    });
+  } catch (err) {
+    return { ok: false, message: err.message };
   }
 }
 
@@ -457,6 +526,53 @@ function handleStatuses_(params) {
       approved_at: String(values[r][approvedAtCol] || "")
     });
   }
+
+  return { ok: true, items: items };
+}
+
+function handlePendingApprovalsForOwner_(ownerEmailRaw) {
+  const activeEmail = normalizeEmail_(Session.getActiveUser().getEmail());
+  const requestedOwnerEmail = normalizeEmail_(ownerEmailRaw || activeEmail);
+
+  if (!isUniMapEmail_(activeEmail)) {
+    throw new Error("Action requires signed-in UniMAP account.");
+  }
+  if (requestedOwnerEmail !== activeEmail) {
+    throw new Error("You can only view approvals assigned to your UniMAP account.");
+  }
+
+  const sheet = getSheet_();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return { ok: true, items: [] };
+
+  const idx = headersIndex_(values[0]);
+  const items = [];
+
+  for (let r = 1; r < values.length; r++) {
+    const ownerEmail = normalizeEmail_(values[r][idx.owner_lecturer_email]);
+    const status = String(values[r][idx.status] || "Draft");
+    if (ownerEmail !== requestedOwnerEmail || status !== "Pending") continue;
+
+    const helperEmail = normalizeEmail_(values[r][idx.helper_lecturer_email]);
+    items.push({
+      request_id: String(values[r][idx.request_id] || ""),
+      record_id: String(values[r][idx.record_id] || ""),
+      created_at: String(values[r][idx.created_at] || ""),
+      subject_code: String(values[r][idx.subject_code] || ""),
+      semester: String(values[r][idx.semester] || ""),
+      jenis: String(values[r][idx.jenis] || ""),
+      schedule: String(values[r][idx.schedule] || ""),
+      helper_lecturer_email: helperEmail,
+      helper_lecturer_name: resolveDisplayName_(helperEmail),
+      owner_lecturer_email: ownerEmail,
+      approval_token: String(values[r][idx.approval_token] || ""),
+      jam_beban: Number(values[r][idx.jam_beban] || 0)
+    });
+  }
+
+  items.sort(function(a, b) {
+    return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+  });
 
   return { ok: true, items: items };
 }
@@ -802,6 +918,33 @@ function handleSubmit_(record) {
   };
 }
 
+function handleResendApprovalEmail_(requestIdRaw) {
+  const requestId = String(requestIdRaw || "").trim();
+  if (!requestId) throw new Error("Missing request_id.");
+
+  const activeEmail = normalizeEmail_(Session.getActiveUser().getEmail());
+  if (!isUniMapEmail_(activeEmail)) {
+    throw new Error("Action requires signed-in UniMAP account.");
+  }
+
+  const row = getRequestByRequestId_(requestId);
+  if (!row) throw new Error("Request not found.");
+  if (row.status !== "Pending") {
+    return { ok: false, message: `Cannot resend email because request is already ${row.status || "processed"}.` };
+  }
+
+  if (activeEmail !== row.owner_lecturer_email && activeEmail !== row.helper_lecturer_email) {
+    throw new Error("Only the assigned owner or original requester can resend this email.");
+  }
+
+  sendApprovalEmail_(row);
+  return {
+    ok: true,
+    message: `Approval email resent to ${row.owner_lecturer_email}.`,
+    request_id: row.request_id
+  };
+}
+
 function handleDecision_(input) {
   const recordId = String(input.record_id || "");
   const token = String(input.token || "");
@@ -860,15 +1003,12 @@ function handleDecision_(input) {
 }
 
 function sendApprovalEmail_(row) {
-  let appUrl = ScriptApp.getService().getUrl();
-  // Force domain-specific URL to ensure UniMAP account login
-  if (appUrl.includes("/macros/s/") && !appUrl.includes("unimap.edu.my")) {
-    appUrl = appUrl.replace("/macros/s/", "/a/macros/unimap.edu.my/s/");
-  }
+  const appUrl = buildAppUrl_();
 
   const qs = `record_id=${encodeURIComponent(row.record_id)}&token=${encodeURIComponent(row.approval_token)}&authuser=${encodeURIComponent(row.owner_lecturer_email)}`;
   const approveLink = `${appUrl}?action=decision&decision=Approved&${qs}`;
   const rejectLink = `${appUrl}?action=decision&decision=Rejected&${qs}`;
+  const pendingLink = `${appUrl}?view=pendingapprovals&authuser=${encodeURIComponent(row.owner_lecturer_email)}`;
 
   const ownerName = resolveDisplayName_(row.owner_lecturer_email);
   const helperName = resolveDisplayName_(row.helper_lecturer_email);
@@ -886,6 +1026,8 @@ function sendApprovalEmail_(row) {
     `Approve: ${approveLink}`,
     `Reject: ${rejectLink}`,
     "",
+    `Or open your pending approvals page: ${pendingLink}`,
+    "",
     "Note: These verification links can only be used by you as the designated subject owner.",
     "",
     "This email is generated by the UniMAP teaching load tool.",
@@ -896,6 +1038,36 @@ function sendApprovalEmail_(row) {
     subject: subject,
     body: body
   });
+}
+
+function getRequestByRequestId_(requestId) {
+  const sheet = getSheet_();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return null;
+
+  for (let r = 1; r < values.length; r++) {
+    if (String(values[r][0] || "") !== requestId) continue;
+
+    const row = {};
+    HEADERS.forEach(function(header, i) {
+      row[header] = values[r][i];
+    });
+    row.request_id = String(row.request_id || "");
+    row.record_id = String(row.record_id || "");
+    row.created_at = String(row.created_at || "");
+    row.subject_code = String(row.subject_code || "");
+    row.semester = String(row.semester || "");
+    row.jenis = String(row.jenis || "");
+    row.schedule = String(row.schedule || "");
+    row.helper_lecturer_email = normalizeEmail_(row.helper_lecturer_email);
+    row.owner_lecturer_email = normalizeEmail_(row.owner_lecturer_email);
+    row.status = String(row.status || "");
+    row.approval_token = String(row.approval_token || "");
+    row.approver_comment = String(row.approver_comment || "");
+    return row;
+  }
+
+  return null;
 }
 
 function getSheet_() {
@@ -979,6 +1151,14 @@ function getListofSubjectSheet_() {
 
 function malaysiaNowIso_() {
   return Utilities.formatDate(new Date(), MALAYSIA_TZ, "yyyy-MM-dd'T'HH:mm:ss") + "+08:00";
+}
+
+function buildAppUrl_() {
+  let appUrl = ScriptApp.getService().getUrl();
+  if (appUrl.includes("/macros/s/") && !appUrl.includes("unimap.edu.my")) {
+    appUrl = appUrl.replace("/macros/s/", "/a/macros/unimap.edu.my/s/");
+  }
+  return appUrl;
 }
 
 function normalizeMalaysiaIso_(value, fallbackIso) {
