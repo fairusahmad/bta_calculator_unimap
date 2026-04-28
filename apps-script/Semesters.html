@@ -1,0 +1,180 @@
+<!doctype html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Semester Management</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 20px; background-color: #f9f9f9; color: #333; }
+    .container { max-width: 800px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    h1, h2 { color: #111; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+    label { display: block; margin-bottom: 5px; font-weight: 600; }
+    input[type="text"], input[type="number"] { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 1rem; }
+    button:hover { background-color: #0056b3; }
+    button:disabled { background-color: #ccc; }
+    .remove-btn { background-color: #dc3545; font-size: 0.85rem; padding: 4px 8px; }
+    .remove-btn:hover { background-color: #b02a37; }
+    #status { margin-top: 10px; font-style: italic; color: #555; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: flex-end; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Semester Management</h1>
+
+    <h2>Add New Semester</h2>
+    <form id="semesterForm">
+      <div class="form-grid">
+        <div>
+          <label for="semesterNum">Semester</label>
+          <input type="number" id="semesterNum" name="semesterNum" placeholder="e.g., 1" required min="1" max="3">
+        </div>
+        <div>
+          <label for="year">Year</label>
+          <input type="text" id="year" name="year" placeholder="e.g., 2025/2026" required pattern="\d{4}/\d{4}">
+        </div>
+        <button type="submit" id="submitBtn">Add Semester</button>
+      </div>
+    </form>
+    <div id="status"></div>
+
+    <h2>Registered Semesters</h2>
+    <button id="refreshBtn" type="button" style="margin-bottom: 10px;">Refresh List</button>
+    <div id="listStatus" style="font-size: 0.9rem; color: #555;"></div>
+    <table id="semestersTable">
+      <thead>
+        <tr>
+          <th>Semester</th>
+          <th>Year</th>
+          <th>Formatted Value</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Rows will be populated by script -->
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    function setStatus(el, text, isError = false, timeoutMs = 3000) {
+        el.textContent = text;
+        el.style.color = isError ? '#dc3545' : '#555';
+        if (timeoutMs > 0) {
+            setTimeout(() => {
+                if (el.textContent === text) el.textContent = '';
+            }, timeoutMs);
+        }
+    }
+
+    function renderSemesters(semesters) {
+        const tbody = document.querySelector('#semestersTable tbody');
+        tbody.innerHTML = ''; // Clear existing rows
+
+        if (semesters && semesters.length > 0) {
+            semesters.forEach(sem => {
+                const tr = document.createElement('tr');
+                const formattedValue = `${sem.semester} ${sem.year}`;
+                tr.innerHTML = `
+                    <td>${sem.semester}</td>
+                    <td>${sem.year}</td>
+                    <td>${formattedValue}</td>
+                    <td><button class="remove-btn" data-value="${formattedValue}">Remove</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="4">No semesters found.</td></tr>';
+        }
+    }
+
+    function refreshSemesters() {
+        const listStatusEl = document.getElementById('listStatus');
+        setStatus(listStatusEl, 'Refreshing...', false, 0);
+
+        google.script.run
+            .withSuccessHandler(function(response) {
+                if (response.ok) {
+                    renderSemesters(response.items);
+                    setStatus(listStatusEl, 'List updated!', false, 2000);
+                } else {
+                    setStatus(listStatusEl, 'Error: ' + response.message, true);
+                }
+            })
+            .withFailureHandler(function(error) {
+                setStatus(listStatusEl, 'Error: ' + error.message, true);
+            })
+            .apiGetSemesters();
+    }
+
+    document.getElementById('semesterForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const submitBtn = document.getElementById('submitBtn');
+      const statusEl = document.getElementById('status');
+      
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Adding...';
+      setStatus(statusEl, 'Processing...', false, 0);
+
+      const semesterNum = document.getElementById('semesterNum').value;
+      const year = document.getElementById('year').value;
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Add Semester';
+          if (response.ok) {
+            setStatus(statusEl, 'Successfully added semester.', false);
+            document.getElementById('semesterForm').reset();
+            refreshSemesters();
+          } else {
+            setStatus(statusEl, 'Error: ' + response.message, true);
+          }
+        })
+        .withFailureHandler(function(error) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Add Semester';
+          setStatus(statusEl, 'Error: ' + error.message, true);
+        })
+        .apiAddSemester(semesterNum, year);
+    });
+
+    document.getElementById('semestersTable').addEventListener('click', function(e) {
+        if (!e.target.classList.contains('remove-btn')) return;
+
+        const value = e.target.getAttribute('data-value');
+        if (!value || !confirm(`Are you sure you want to remove semester "${value}"?`)) return;
+
+        e.target.disabled = true;
+        e.target.textContent = 'Removing...';
+
+        google.script.run
+            .withSuccessHandler(function(response) {
+                if (response.ok) {
+                    setStatus(document.getElementById('listStatus'), `Semester "${value}" removed.`, false);
+                    refreshSemesters();
+                } else {
+                    setStatus(document.getElementById('listStatus'), 'Error: ' + response.message, true);
+                    e.target.disabled = false;
+                    e.target.textContent = 'Remove';
+                }
+            })
+            .withFailureHandler(function(error) {
+                setStatus(document.getElementById('listStatus'), 'Error: ' + error.message, true);
+                e.target.disabled = false;
+                e.target.textContent = 'Remove';
+            })
+            .apiRemoveSemester(value);
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', refreshSemesters);
+
+    window.addEventListener('load', refreshSemesters);
+  </script>
+</body>
+</html>

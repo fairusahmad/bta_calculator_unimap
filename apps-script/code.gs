@@ -5,6 +5,8 @@ const ALL_LECTURER_SHEET_NAME = "All_lecturer_record";
 const SUBJECTS_SHEET_NAME = "Subjects";
 const EMAIL_BANK_SHEET_NAME = "EmailBank";
 const LIST_OF_SUBJECT_SHEET_NAME = "List_of_Subject"; // New constant for the subject list sheet
+const SEMESTERS_SHEET = "Semesters";
+
 //const DEFAULT_SUBJECT_OWNER_EMAIL = "fairusahmad@unimap.edu.my";
 
 const HEADERS = [
@@ -69,6 +71,11 @@ const EMAIL_BANK_HEADERS = [
   "email",
   "name",
   "updated_at"
+];
+
+const SEMESTERS_HEADERS = [
+  "semester",
+  "year"
 ];
 
 //const DEFAULT_SUBJECTS = [
@@ -145,7 +152,16 @@ function setupSheets_() {
   getAllLecturerSheet_();
   getSubjectsSheet_();
   getListofSubjectSheet_(); // Ensure the List_of_Subject sheet is also set up
+  createSemestersSheet_();
   getEmailBankSheet_();
+}
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('BTA Admin')
+    .addItem('Manage Subjects', 'showSubjectDialog_')
+    .addItem('Manage Semesters', 'showSemestersDialog_')
+    .addToUi();
 }
 
 function doGet(e) {
@@ -165,7 +181,6 @@ function doGet(e) {
     t.subjects = subjectsData.items || [];
     return t.evaluate().setTitle("Subject Management");
   }
-
   if (view === "pendingapprovals") {
     enforceUniMapUser_();
     const currentUserEmail = normalizeEmail_(Session.getActiveUser().getEmail());
@@ -176,6 +191,13 @@ function doGet(e) {
     t.appUrl = buildAppUrl_();
     return t.evaluate().setTitle("My Pending Approvals");
   }
+  if (view === 'semesters') {
+    // Serve the semester management page as a standalone web page
+    enforceUniMapUser_(); // Protect this admin page
+    return HtmlService.createHtmlOutputFromFile('Semesters')
+      .setTitle("Semester Management");
+  }
+
 
 
   if (action === "submit") {
@@ -208,6 +230,14 @@ function doGet(e) {
       return jsonOrJsonp_(handleSubjects_(), p.callback);
     } catch (err) {
       return jsonOrJsonp_({ ok: false, message: err.message }, p.callback);
+    }
+  }
+
+  if (action === "semesters") {
+    try {
+      return jsonOrJsonp_(handleGetSemesters_(), p.callback);
+    } catch (err) {
+      return jsonOrJsonp_({ ok: false, message: err.message, items: [] }, p.callback);
     }
   }
 
@@ -346,6 +376,14 @@ function apiGetSubjects() {
   }
 }
 
+function apiGetSemesters() {
+  try {
+    return handleGetSemesters_();
+  } catch (err) {
+    return { ok: false, message: err.message, items: [] };
+  }
+}
+
 function apiGetMyPendingApprovals() {
   try {
     return handlePendingApprovalsForOwner_();
@@ -397,6 +435,22 @@ function apiSearchUsers(query) {
     return handleSearchUsers_(query);
   } catch (err) {
     return { ok: false, message: err.message, items: [] };
+  }
+}
+
+function apiAddSemester(semester, year) {
+  try {
+    return handleAddSemester_(semester, year);
+  } catch (e) {
+    return { ok: false, message: e.message };
+  }
+}
+
+function apiRemoveSemester(formattedValue) {
+  try {
+    return handleRemoveSemester_(formattedValue);
+  } catch (e) {
+    return { ok: false, message: e.message };
   }
 }
 
@@ -453,6 +507,13 @@ function apiGetListOfSubjects() {
   } catch (err) {
     return { ok: false, message: "Failed to get list of subjects: " + err.message, items: [] };
   }
+}
+
+function showSubjectDialog_() {
+  const t = HtmlService.createTemplateFromFile("SubjectReg");
+  const subjectsData = handleSubjects_();
+  t.subjects = subjectsData.items || [];
+  return t.evaluate().setTitle("Subject Management");
 }
 
 function handleSearchUsers_(query) {
@@ -575,6 +636,53 @@ function handlePendingApprovalsForOwner_(ownerEmailRaw) {
   });
 
   return { ok: true, items: items };
+}
+
+function handleGetSemesters_() {
+  const sheet = createSemestersSheet_();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return { ok: true, items: [] };
+
+  const headers = values.shift();
+  const idx = headersIndex_(headers);
+
+  const semesters = values.map(row => ({
+    semester: row[idx.semester],
+    year: row[idx.year]
+  })).filter(s => s.semester && s.year);
+
+  return { ok: true, items: semesters };
+}
+
+function handleAddSemester_(semester, year) {
+  enforceUniMapUser_();
+  if (!semester || !year) throw new Error("Semester and Year are required.");
+  if (!/^\d{4}\/\d{4}$/.test(year)) throw new Error("Year must be in YYYY/YYYY format.");
+
+  const sheet = createSemestersSheet_();
+  const values = sheet.getDataRange().getValues();
+  const formattedValue = `${semester} ${year}`;
+
+  const exists = values.some(row => `${row[0]} ${row[1]}` === formattedValue);
+  if (exists) throw new Error(`Semester "${formattedValue}" already exists.`);
+
+  sheet.appendRow([semester, year]);
+  return { ok: true, message: "Semester added." };
+}
+
+function handleRemoveSemester_(formattedValue) {
+  enforceUniMapUser_();
+  if (!formattedValue) throw new Error("Semester value is required to remove.");
+
+  const sheet = createSemestersSheet_();
+  const values = sheet.getDataRange().getValues();
+
+  const rowIndex = values.findIndex(row => `${row[0]} ${row[1]}` === formattedValue);
+
+  if (rowIndex === -1) return { ok: false, message: "Semester not found." };
+
+  sheet.deleteRow(rowIndex + 1); // Sheet rows are 1-indexed
+  return { ok: true, message: "Semester removed." };
 }
 
 function handleSubjects_() {
@@ -1149,6 +1257,23 @@ function getListofSubjectSheet_() {
   return sh;
 }
 
+function createSemestersSheet_() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName(SEMESTERS_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(SEMESTERS_SHEET);
+    sheet.appendRow(SEMESTERS_HEADERS);
+    sheet.getRange("A1:B1").setFontWeight("bold");
+    sheet.setFrozenRows(1);
+    // Add default values as per your request
+    sheet.appendRow(["1", "2025/2026"]);
+    sheet.appendRow(["2", "2025/2026"]);
+    sheet.appendRow(["1", "2026/2027"]);
+    SpreadsheetApp.flush();
+  }
+  return sheet;
+}
+
 function malaysiaNowIso_() {
   return Utilities.formatDate(new Date(), MALAYSIA_TZ, "yyyy-MM-dd'T'HH:mm:ss") + "+08:00";
 }
@@ -1178,6 +1303,13 @@ function enforceUserExecution_(expectedEmail) {
   if (activeEmail !== expectedEmail) {
     throw new Error("Submit using the same UniMAP account as helper_lecturer_email.");
   }
+}
+
+function showSemestersDialog_() {
+  const html = HtmlService.createHtmlOutputFromFile('Semesters')
+    .setWidth(850)
+    .setHeight(600);
+  SpreadsheetApp.getUi().showModalDialog(html, 'Semester Management');
 }
 
 function enforceUniMapUser_() {

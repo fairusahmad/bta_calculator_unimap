@@ -220,24 +220,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
     </div>
   </div>
 
-  <div class="card">
-    <h2 style="margin:0 0 10px;">Register Semester</h2>
-
-    <div class="grid" style="grid-template-columns: repeat(3, minmax(120px, 1fr));">
-      <div>
-        <label for="newSemester">Semester</label>
-        <input id="newSemester" type="text" placeholder="e.g., 1 2025/2026" />
-      </div>
-      <div style="display: flex; align-items: flex-end;">
-        <button id="addSemesterBtn">Add Semester</button>
-      </div>
-    </div>
-
-    <div style="margin-top: 12px;">
-      <p class="muted" style="margin:0 0 8px;">Registered Semesters:</p>
-      <div id="semesterList" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
-    </div>
-  </div>
+  <div class="card" id="semester-card-placeholder" style="display: none;"></div>
 
   <div class="card">
     <h2 style="margin:0 0 10px;">Add Row</h2>
@@ -584,9 +567,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
       enterAppBtn: document.getElementById("enterAppBtn"),
       appRoot: document.getElementById("appRoot"),
       subject: document.getElementById("subject"),
-      newSemester: document.getElementById("newSemester"),
-      addSemesterBtn: document.getElementById("addSemesterBtn"),
-      semesterList: document.getElementById("semesterList"),
       semester: document.getElementById("semester"),
       kredit: document.getElementById("kredit"),
       jamMinggu: document.getElementById("jamMinggu"),
@@ -708,7 +688,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
     }
 
     const subjects = [];
-    const semesters = ["1 2025/2026"];
+    const semesters = [];
     const rows = [];
     const subjectOwnerMap = {};
     const CACHE_KEY = "bta-cache-v1";
@@ -1102,6 +1082,40 @@ html, body { max-width: 100%; overflow-x: hidden; }
       appendLog("OK", "Subjects synced", { count: subjects.length });
     }
 
+    async function syncSemestersFromServer_() {
+      const semesterSelect = els.semester;
+      if (!semesterSelect) return;
+
+      const originalValue = semesterSelect.value;
+      semesterSelect.innerHTML = '<option value="">Loading semesters...</option>';
+      semesterSelect.disabled = true;
+
+      const handleSuccess = (response) => {
+        semesterSelect.disabled = false;
+        if (response && response.ok && Array.isArray(response.items)) {
+          semesters.length = 0;
+          const semesterValues = response.items.map(item => `${item.semester} ${item.year}`);
+          semesters.push(...semesterValues);
+          renderSemesters();
+          // Try to restore the previously selected value
+          if (Array.from(semesterSelect.options).some(opt => opt.value === originalValue)) {
+            semesterSelect.value = originalValue;
+          }
+        } else {
+          semesterSelect.innerHTML = '<option value="">Error loading semesters</option>';
+          appendLog("WARN", "Failed to load semesters", { message: (response && response.message) || "Unknown error" });
+        }
+      };
+
+      const handleFailure = (error) => {
+        semesterSelect.disabled = false;
+        semesterSelect.innerHTML = '<option value="">Error loading semesters</option>';
+        appendLog("ERROR", "syncSemestersFromServer_ failed", { message: error.message });
+      };
+
+      callAppsScript_("apiGetSemesters", []).then(handleSuccess).catch(handleFailure);
+    }
+
     function statusBadge(status) {
       const s = String(status || "Draft");
       if (s === "Approved") return `<span class="pill" style="background:#e7f7ea;color:#127a2a;">Approved</span>`;
@@ -1361,54 +1375,11 @@ html, body { max-width: 100%; overflow-x: hidden; }
     }
 
     function renderSemesters() {
-      els.semesterList.innerHTML = semesters
-        .map((s, idx) => `
-          <span class="pill">
-            ${s}
-            <button class="secondary" style="padding: 2px 6px; font-size: 11px; margin-left: 4px;" data-del-semester="${idx}">x</button>
-          </span>
-        `)
-        .join("");
-
       const currentValue = els.semester.value;
       els.semester.innerHTML = `<option value="">-- Select Semester --</option>` +
         semesters.map(s => `<option value="${s}">${s}</option>`).join("");
       els.semester.value = currentValue || semesters[0] || "";
     }
-
-    function addSemester() {
-      const value = els.newSemester.value.trim();
-      if (!value) {
-        els.msg.innerHTML = `<span class="danger">Please enter a semester value.</span>`;
-        return;
-      }
-      if (semesters.includes(value)) {
-        els.msg.innerHTML = `<span class="danger">Semester already registered.</span>`;
-        return;
-      }
-      semesters.push(value);
-      els.newSemester.value = "";
-      renderSemesters();
-      els.msg.textContent = `Semester "${value}" registered!`;
-      setTimeout(() => (els.msg.textContent = ""), 2000);
-    }
-
-    els.addSemesterBtn.addEventListener("click", addSemester);
-    els.newSemester.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") addSemester();
-    });
-
-    document.getElementById("semesterList").addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-del-semester]");
-      if (!btn) return;
-      const idx = Number(btn.getAttribute("data-del-semester"));
-      if (Number.isFinite(idx)) {
-        const removed = semesters.splice(idx, 1);
-        renderSemesters();
-        els.msg.textContent = `Semester "${removed[0]}" removed.`;
-        setTimeout(() => (els.msg.textContent = ""), 2000);
-      }
-    });
 
     // --- File Export/Import functions ---
     async function exportData() {
@@ -2123,6 +2094,9 @@ html, body { max-width: 100%; overflow-x: hidden; }
     loadFromCache();
     void syncSubjectsFromServer_().catch((err) => {
       appendLog("WARN", "Initial subject sync failed", { error: String(err && err.message || err) });
+    });
+    void syncSemestersFromServer_().catch((err) => {
+      appendLog("WARN", "Initial semester sync failed", { error: String(err && err.message || err) });
     });
     void syncRowsFromServer_().catch((err) => {
       appendLog("WARN", "Initial sheet sync failed", { error: String(err && err.message || err) });
