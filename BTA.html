@@ -180,6 +180,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.getElementById('formulaBlock'),{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}]});"></script>
+  <script id="subjectRegUrlData" type="application/json"><?!= JSON.stringify(subjectRegUrl || "") ?></script>
 </head>
 <body>
   <div id="landingPage" class="landing">
@@ -200,7 +201,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
     </div>
   </div>
   <div id="appRoot" class="app-shell hidden">
-  <h1>Jam Beban Calculator (Pengajaran)</h1>
+  <h1 id="pageTitle">Jam Beban Calculator (Pengajaran)</h1>
   <p class="muted">
     Model:
     <span class="pill">JumPelajar = MAX(0, BilPelajar - T) x 0.033 [T=30, Makmal Btech: T=15]</span>
@@ -220,8 +221,6 @@ html, body { max-width: 100%; overflow-x: hidden; }
     </div>
   </div>
 
-  <div class="card" id="semester-card-placeholder" style="display: none;"></div>
-
   <div class="card">
     <h2 style="margin:0 0 10px;">Add Row</h2>
 
@@ -231,12 +230,26 @@ html, body { max-width: 100%; overflow-x: hidden; }
         <select id="subject">
           <option value="">-- Select Subject --</option>
         </select>
+        <div class="muted" style="margin-top:4px;">
+          <a id="registerSubjectLink" href="#" role="button">Register subject</a>
+        </div>
       </div>
 
       <div>
         <label for="semester">Semester</label>
         <select id="semester">
           <option value="">-- Select Semester --</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="Pendek">Pendek</option>
+          <option value="Tambahan">Tambahan</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="session">Session</label>
+        <select id="session">
+          <option value="">-- Select Session --</option>
         </select>
       </div>
 
@@ -567,7 +580,9 @@ html, body { max-width: 100%; overflow-x: hidden; }
       enterAppBtn: document.getElementById("enterAppBtn"),
       appRoot: document.getElementById("appRoot"),
       subject: document.getElementById("subject"),
+      registerSubjectLink: document.getElementById("registerSubjectLink"),
       semester: document.getElementById("semester"),
+      session: document.getElementById("session"),
       kredit: document.getElementById("kredit"),
       jamMinggu: document.getElementById("jamMinggu"),
       peringkat: document.getElementById("peringkat"),
@@ -700,6 +715,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
     let syncAfterAddTimer = null;
     let syncAfterAddInFlight = false;
     const selectedDateValues = [];
+    const SEMESTER_OPTIONS = ["1", "2", "Pendek", "Tambahan"];
 
     function openDb() {
       return new Promise((resolve, reject) => {
@@ -746,6 +762,11 @@ html, body { max-width: 100%; overflow-x: hidden; }
     function buildBackupFileName() {
       const raw = sanitizeFileName(els.backupName.value);
       return raw ? `BTA ${raw}.json` : "BTA.json";
+    }
+
+    function buildCurrentYearTitle_() {
+      const currentYear = new Date().getFullYear();
+      return `Jam Beban Calculator (Pengajaran) - Jan ${currentYear} to Dec ${currentYear}`;
     }
 
     function showStatus(el, text, timeoutMs = 2000) {
@@ -1082,38 +1103,37 @@ html, body { max-width: 100%; overflow-x: hidden; }
       appendLog("OK", "Subjects synced", { count: subjects.length });
     }
 
-    async function syncSemestersFromServer_() {
-      const semesterSelect = els.semester;
-      if (!semesterSelect) return;
+    function getSessionOptions_() {
+      const currentYear = new Date().getFullYear();
+      return [
+        `${currentYear - 1}/${currentYear}`,
+        `${currentYear}/${currentYear + 1}`
+      ];
+    }
 
-      const originalValue = semesterSelect.value;
-      semesterSelect.innerHTML = '<option value="">Loading semesters...</option>';
-      semesterSelect.disabled = true;
+    function syncSemestersFromServer_() {
+      const currentSemester = String(els.semester.value || "").trim();
+      const currentSession = String(els.session && els.session.value || "").trim();
+      const sessionOptions = getSessionOptions_();
 
-      const handleSuccess = (response) => {
-        semesterSelect.disabled = false;
-        if (response && response.ok && Array.isArray(response.items)) {
-          semesters.length = 0;
-          const semesterValues = response.items.map(item => `${item.semester} ${item.year}`);
-          semesters.push(...semesterValues);
-          renderSemesters();
-          // Try to restore the previously selected value
-          if (Array.from(semesterSelect.options).some(opt => opt.value === originalValue)) {
-            semesterSelect.value = originalValue;
-          }
-        } else {
-          semesterSelect.innerHTML = '<option value="">Error loading semesters</option>';
-          appendLog("WARN", "Failed to load semesters", { message: (response && response.message) || "Unknown error" });
-        }
-      };
+      semesters.length = 0;
+      SEMESTER_OPTIONS.forEach((semester) => {
+        sessionOptions.forEach((session) => {
+          semesters.push(`${semester} ${session}`);
+        });
+      });
 
-      const handleFailure = (error) => {
-        semesterSelect.disabled = false;
-        semesterSelect.innerHTML = '<option value="">Error loading semesters</option>';
-        appendLog("ERROR", "syncSemestersFromServer_ failed", { message: error.message });
-      };
+      renderSemesters();
+      renderSessions();
 
-      callAppsScript_("apiGetSemesters", []).then(handleSuccess).catch(handleFailure);
+      if (SEMESTER_OPTIONS.includes(currentSemester)) {
+        els.semester.value = currentSemester;
+      }
+      if (sessionOptions.includes(currentSession) && els.session) {
+        els.session.value = currentSession;
+      }
+
+      return Promise.resolve({ ok: true, items: semesters });
     }
 
     function statusBadge(status) {
@@ -1122,6 +1142,35 @@ html, body { max-width: 100%; overflow-x: hidden; }
       if (s === "Pending") return `<span class="pill" style="background:#fff4db;color:#8a5a00;">Pending</span>`;
       if (s === "Rejected") return `<span class="pill" style="background:#fdeaea;color:#a82020;">Rejected</span>`;
       return `<span class="pill">Draft</span>`;
+    }
+
+    function escapeHtml_(value) {
+      return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function statusNoteHtml(note) {
+      const text = String(note || "").trim();
+      if (!text) return "";
+      return `<div class="muted" style="margin-top:4px;font-size:0.74rem;line-height:1.3;">${escapeHtml_(text)}</div>`;
+    }
+
+    function formatLocalDateTime_(value) {
+      const date = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(date.getTime())) return "";
+      return new Intl.DateTimeFormat("en-MY", {
+        year: "numeric",
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false
+      }).format(date);
     }
 
     function selfOwnedBadge(row) {
@@ -1265,6 +1314,32 @@ html, body { max-width: 100%; overflow-x: hidden; }
       }
     }
 
+    async function resendPendingApproval_(row) {
+      const requestId = String(row && (row.verifyRequestId || row.verify_request_id) || "").trim();
+      if (!requestId) throw new Error("Missing pending request ID for resend.");
+
+      let result = {};
+      if (canUseAppsScriptRuntime_()) {
+        result = await callAppsScript_("apiResendApprovalEmail", [requestId]);
+      } else {
+        const apiUrl = resolveApiUrl();
+        if (!apiUrl) throw new Error("Open from deployed Web App /exec URL.");
+        const cb = `btaResendCb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        const sep = apiUrl.includes("?") ? "&" : "?";
+        const resendUrl = `${apiUrl}${sep}action=resend_approval_email&request_id=${encodeURIComponent(requestId)}&callback=${encodeURIComponent(cb)}`;
+        result = await callJsonp(resendUrl, 15000);
+      }
+
+      if (result && result.ok === false) throw new Error(result.message || "Resend failed.");
+      return {
+        ok: true,
+        status: "Pending",
+        request_id: requestId,
+        message: (result && result.message) || "Approval email resent.",
+        resent_at: new Date().toISOString()
+      };
+    }
+
     async function refreshVerificationStatuses() {
       const recordIds = rows.map(r => String(r.recordId || "").trim()).filter(Boolean);
       if (!recordIds.length) {
@@ -1375,10 +1450,19 @@ html, body { max-width: 100%; overflow-x: hidden; }
     }
 
     function renderSemesters() {
-      const currentValue = els.semester.value;
+      const currentValue = String(els.semester.value || "").trim();
       els.semester.innerHTML = `<option value="">-- Select Semester --</option>` +
-        semesters.map(s => `<option value="${s}">${s}</option>`).join("");
-      els.semester.value = currentValue || semesters[0] || "";
+        SEMESTER_OPTIONS.map(s => `<option value="${s}">${s}</option>`).join("");
+      els.semester.value = currentValue && SEMESTER_OPTIONS.includes(currentValue) ? currentValue : (SEMESTER_OPTIONS[0] || "");
+    }
+
+    function renderSessions() {
+      if (!els.session) return;
+      const currentValue = String(els.session.value || "").trim();
+      const sessionOptions = getSessionOptions_();
+      els.session.innerHTML = `<option value="">-- Select Session --</option>` +
+        sessionOptions.map(s => `<option value="${s}">${s}</option>`).join("");
+      els.session.value = currentValue && sessionOptions.includes(currentValue) ? currentValue : (sessionOptions[0] || "");
     }
 
     // --- File Export/Import functions ---
@@ -1663,7 +1747,9 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
     function readInputs() {
       const subject = els.subject.value.trim();
-      const semester = els.semester.value.trim();
+      const semesterPart = els.semester.value.trim();
+      const sessionPart = String(els.session && els.session.value || "").trim();
+      const semester = [semesterPart, sessionPart].filter(Boolean).join(" ");
       const kredit = Number(els.kredit.value);
       const jamMinggu = Number(els.jamMinggu.value);
       const peringkat = els.peringkat.value;
@@ -1686,7 +1772,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
       const minggu = 1;
 
       const problems = [];
-      if (!semester) problems.push("Semester");
+      if (!semesterPart) problems.push("Semester");
+      if (!sessionPart) problems.push("Session");
       if (!Number.isFinite(kredit) || kredit < 0) problems.push("Kredit");
       if (!Number.isFinite(jamMinggu) || jamMinggu < 0) problems.push("Jam Pertemuan (Mingguan)");
       if (!Number.isFinite(pelajar) || pelajar < 0) problems.push("Bilangan Pelajar");
@@ -1752,13 +1839,13 @@ html, body { max-width: 100%; overflow-x: hidden; }
           <td>${r.dateDisplay ?? ""}</td>
           <td class="num">${r.pelajar}</td>
           <td>${r.ownerEmail || ""}</td>
-          <td>${statusBadge(r.verifyStatus)}${selfOwnedBadge(r)}</td>
+          <td>${statusBadge(r.verifyStatus)}${selfOwnedBadge(r)}${statusNoteHtml(r.verifyNote)}</td>
           <td class="num">${jp.toFixed(1)}</td>
           <td class="num">${w.toFixed(1)}</td>
           <td class="num"><strong>${jb.toFixed(1)}</strong></td>
           <td class="num"><strong>${ajb.toFixed(1)}</strong></td>
           <td>
-            <button class="secondary" data-submit="${idx}" ${r.verifyStatus === "Pending" || r.verifyStatus === "Approved" ? "disabled" : ""}>Send</button>
+            <button class="secondary" data-submit="${idx}" ${r.verifyStatus === "Approved" ? "disabled" : ""}>${r.verifyStatus === "Pending" ? "Resend" : "Send"}</button>
             <button class="secondary" data-del="${idx}">Delete</button>
           </td>
         `;
@@ -1958,16 +2045,20 @@ html, body { max-width: 100%; overflow-x: hidden; }
         const idx = Number(submitBtn.getAttribute("data-submit"));
         if (Number.isFinite(idx) && rows[idx] && !submitBtn.disabled) {
           const row = rows[idx];
-          if (row.verifyStatus === "Pending" || row.verifyStatus === "Approved") return;
+          if (row.verifyStatus === "Approved") return;
+          const wasPending = row.verifyStatus === "Pending";
           submitBtn.disabled = true;
           submitBtn.textContent = "Processing...";
-          submitRowForVerification(row)
+          const action = wasPending ? resendPendingApproval_(row) : submitRowForVerification(row);
+          action
             .then((result) => {
               row.verifyStatus = result.status || "Pending";
               row.verifyRequestId = result.request_id || result.requestId || "";
-              row.verifyNote = result.message || "Submitted to owner.";
-              appendLog("OK", "Single row submit completed", { record_id: row.recordId, status: row.verifyStatus });
-              showStatus(els.statusVerify, "Submitted");
+              row.verifyNote = wasPending
+                ? `Last resent: ${formatLocalDateTime_(result.resent_at || new Date())}`
+                : (result.message || "Submitted to owner.");
+              appendLog("OK", wasPending ? "Single row resend completed" : "Single row submit completed", { record_id: row.recordId, status: row.verifyStatus });
+              showStatus(els.statusVerify, wasPending ? "Resent" : "Submitted");
               // Persist the status update to the server cache sheet
               return upsertRowToServer_(row);
             })
@@ -1975,8 +2066,8 @@ html, body { max-width: 100%; overflow-x: hidden; }
               appendLog("OK", "Persisted status update to All_lecturer_record", { record_id: row.recordId });
             })
             .catch((err) => {
-              row.verifyNote = err.message || "Submit failed.";
-              appendLog("ERROR", "Single row submit/persist failed", { record_id: row.recordId, error: err.message || String(err) });
+              row.verifyNote = err.message || (wasPending ? "Resend failed." : "Submit failed.");
+              appendLog("ERROR", wasPending ? "Single row resend/persist failed" : "Single row submit/persist failed", { record_id: row.recordId, error: err.message || String(err) });
               showStatus(els.statusVerify, "Error");
             }).finally(() => {
               render();
@@ -2042,7 +2133,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
       els.appRoot.classList.remove("hidden");
     });
 
-    ["subject","semester","kredit","jamMinggu","peringkat","jenis","kumpulan","dateInput","weekInput","pelajar","ownerEmail"].forEach(id => {
+    ["subject","semester","session","kredit","jamMinggu","peringkat","jenis","kumpulan","dateInput","weekInput","pelajar","ownerEmail"].forEach(id => {
       document.getElementById(id).addEventListener("input", updatePreview);
       document.getElementById(id).addEventListener("change", updatePreview);
     });
@@ -2075,6 +2166,31 @@ html, body { max-width: 100%; overflow-x: hidden; }
     });
 
     updatePreview();
+    const pageTitle = buildCurrentYearTitle_();
+    document.title = pageTitle;
+    if (document.getElementById("pageTitle")) {
+      document.getElementById("pageTitle").textContent = pageTitle;
+    }
+    if (els.registerSubjectLink) {
+      const subjectRegUrlEl = document.getElementById("subjectRegUrlData");
+      let subjectRegUrl = "";
+      if (subjectRegUrlEl) {
+        try {
+          subjectRegUrl = JSON.parse(subjectRegUrlEl.textContent || "\"\"");
+        } catch (_) {
+          subjectRegUrl = "";
+        }
+      }
+      if (subjectRegUrl) {
+        els.registerSubjectLink.addEventListener("click", (event) => {
+          event.preventDefault();
+          const opened = window.open(subjectRegUrl, "_blank", "noopener,noreferrer");
+          if (!opened) {
+            window.top.location.href = subjectRegUrl;
+          }
+        });
+      }
+    }
     appendLog("INFO", "App initialized");
     const runtime = getRuntimeInfo();
     appendLog("INFO", "Runtime detected", {
@@ -2089,6 +2205,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
     }
     renderSubjects();
     renderSemesters();
+    renderSessions();
     renderSelectedDates_();
     render();
     loadFromCache();
@@ -2096,7 +2213,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
       appendLog("WARN", "Initial subject sync failed", { error: String(err && err.message || err) });
     });
     void syncSemestersFromServer_().catch((err) => {
-      appendLog("WARN", "Initial semester sync failed", { error: String(err && err.message || err) });
+      appendLog("WARN", "Initial semester setup failed", { error: String(err && err.message || err) });
     });
     void syncRowsFromServer_().catch((err) => {
       appendLog("WARN", "Initial sheet sync failed", { error: String(err && err.message || err) });

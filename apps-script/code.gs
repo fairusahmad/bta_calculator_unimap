@@ -78,6 +78,8 @@ const SEMESTERS_HEADERS = [
   "year"
 ];
 
+const SEMESTER_OPTIONS = ["1", "2", "Pendek", "Tambahan"];
+
 //const DEFAULT_SUBJECTS = [
 //  "DSC101",
 //  "DSC102",
@@ -323,6 +325,8 @@ function doGet(e) {
   const currentUserEmail = normalizeEmail_(Session.getActiveUser().getEmail());
   t.currentUserEmail = currentUserEmail;
   t.currentUserName = resolveDisplayName_(currentUserEmail);
+  t.appUrl = buildAppUrl_();
+  t.subjectRegUrl = `${buildAppUrl_()}?view=subjectreg`;
   return t
     .evaluate()
     .setTitle("Jam Beban Calculator (Pengajaran)");
@@ -657,6 +661,9 @@ function handleGetSemesters_() {
 function handleAddSemester_(semester, year) {
   enforceUniMapUser_();
   if (!semester || !year) throw new Error("Semester and Year are required.");
+  if (SEMESTER_OPTIONS.indexOf(String(semester)) === -1) {
+    throw new Error(`Semester must be one of: ${SEMESTER_OPTIONS.join(", ")}.`);
+  }
   if (!/^\d{4}\/\d{4}$/.test(year)) throw new Error("Year must be in YYYY/YYYY format.");
 
   const sheet = createSemestersSheet_();
@@ -1224,6 +1231,7 @@ function sendApprovalEmail_(row) {
 
   MailApp.sendEmail({
     to: row.owner_lecturer_email,
+    cc: row.helper_lecturer_email,
     subject: subject,
     body: body
   });
@@ -1346,13 +1354,24 @@ function createSemestersSheet_() {
     sheet.appendRow(SEMESTERS_HEADERS);
     sheet.getRange("A1:B1").setFontWeight("bold");
     sheet.setFrozenRows(1);
-    // Add default values as per your request
-    sheet.appendRow(["1", "2025/2026"]);
-    sheet.appendRow(["2", "2025/2026"]);
-    sheet.appendRow(["1", "2026/2027"]);
+    const sessions = getDefaultSessionOptions_();
+    const rows = [
+      ["1", sessions[0]],
+      ["2", sessions[0]],
+      ["1", sessions[1]]
+    ];
+    sheet.getRange(2, 1, rows.length, SEMESTERS_HEADERS.length).setValues(rows);
     SpreadsheetApp.flush();
   }
   return sheet;
+}
+
+function getDefaultSessionOptions_() {
+  const currentYear = Number(Utilities.formatDate(new Date(), MALAYSIA_TZ, "yyyy"));
+  return [
+    `${currentYear - 1}/${currentYear}`,
+    `${currentYear}/${currentYear + 1}`
+  ];
 }
 
 function malaysiaNowIso_() {

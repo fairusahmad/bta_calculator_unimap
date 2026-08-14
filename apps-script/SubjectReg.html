@@ -46,6 +46,7 @@
       <div>
         <label for="subjectCode">Subject Code with subject name</label>
         <input type="text" id="subjectCode" name="subjectCode" placeholder="e.g., DSC101 Subject A" required list="subjectList">
+        <p class="owner-warning">Type it yourself if it is not available in the dropdown.</p>
       </div>
       <datalist id="subjectList">
         <? if (typeof subjectList !== 'undefined' && subjectList.length > 0) { ?>
