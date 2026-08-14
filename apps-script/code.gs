@@ -1110,6 +1110,57 @@ function handleDecision_(input) {
   return { ok: true, message: `Request ${recordId} marked as ${decision}.` };
 }
 
+function getApprovalItemsForOwner_(ownerEmailRaw, options) {
+  const ownerEmail = normalizeEmail_(ownerEmailRaw);
+  const includeStatuses = ((options && options.includeStatuses) || []).map(function(status) {
+    return String(status || "");
+  });
+  const statusSet = includeStatuses.length ? new Set(includeStatuses) : null;
+
+  if (!isUniMapEmail_(ownerEmail)) return [];
+
+  const sheet = getSheet_();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
+
+  const idx = headersIndex_(values[0]);
+  const items = [];
+
+  for (let r = 1; r < values.length; r++) {
+    const rowOwnerEmail = normalizeEmail_(values[r][idx.owner_lecturer_email]);
+    if (rowOwnerEmail !== ownerEmail) continue;
+
+    const status = String(values[r][idx.status] || "Draft");
+    if (statusSet && !statusSet.has(status)) continue;
+
+    const helperEmail = normalizeEmail_(values[r][idx.helper_lecturer_email]);
+    items.push({
+      request_id: String(values[r][idx.request_id] || ""),
+      record_id: String(values[r][idx.record_id] || ""),
+      created_at: String(values[r][idx.created_at] || ""),
+      subject_code: String(values[r][idx.subject_code] || ""),
+      semester: String(values[r][idx.semester] || ""),
+      jenis: String(values[r][idx.jenis] || ""),
+      schedule: String(values[r][idx.schedule] || ""),
+      helper_lecturer_email: helperEmail,
+      helper_lecturer_name: resolveDisplayName_(helperEmail),
+      owner_lecturer_email: rowOwnerEmail,
+      approval_token: String(values[r][idx.approval_token] || ""),
+      jam_beban: Number(values[r][idx.jam_beban] || 0),
+      status: status,
+      approver_email: normalizeEmail_(values[r][idx.approver_email]),
+      approver_comment: String(values[r][idx.approver_comment] || ""),
+      approved_at: String(values[r][idx.approved_at] || "")
+    });
+  }
+
+  items.sort(function(a, b) {
+    return String(b.created_at || "").localeCompare(String(a.created_at || ""));
+  });
+
+  return items;
+}
+
 function sendApprovalEmail_(row) {
   const appUrl = buildAppUrl_();
 
@@ -1120,6 +1171,33 @@ function sendApprovalEmail_(row) {
 
   const ownerName = resolveDisplayName_(row.owner_lecturer_email);
   const helperName = resolveDisplayName_(row.helper_lecturer_email);
+  const approvalItems = getApprovalItemsForOwner_(row.owner_lecturer_email, {
+    includeStatuses: ["Pending", "Approved", "Rejected"]
+  });
+
+  const statusLabelMap = {
+    Pending: "Pending",
+    Approved: "Approved",
+    Rejected: "Not Approved"
+  };
+
+  const approvalListLines = approvalItems.length
+    ? approvalItems.map(function(item, index) {
+        const statusLabel = statusLabelMap[item.status] || item.status || "Unknown";
+        const details = [
+          `${index + 1}. ${item.subject_code} | ${statusLabel}`,
+          `   Helper: ${item.helper_lecturer_name} (${item.helper_lecturer_email})`,
+          `   Type: ${item.jenis || "-"}`,
+          `   Schedule: ${item.schedule || "-"}`,
+          `   Submitted: ${item.created_at || "-"}`
+        ];
+
+        if (item.approved_at) details.push(`   Decided at: ${item.approved_at}`);
+        if (item.approver_comment) details.push(`   Comment: ${item.approver_comment}`);
+
+        return details.join("\n");
+      }).join("\n\n")
+    : "No approval records found.";
 
   const subject = `[UniMAP] Verification required: ${row.subject_code}`;
   const body = [
@@ -1133,6 +1211,9 @@ function sendApprovalEmail_(row) {
     "Please verify the entry by clicking one of the links below:",
     `Approve: ${approveLink}`,
     `Reject: ${rejectLink}`,
+    "",
+    "Approval list for your account:",
+    approvalListLines,
     "",
     `Or open your pending approvals page: ${pendingLink}`,
     "",
